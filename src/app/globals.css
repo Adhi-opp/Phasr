@@ -155,8 +155,23 @@
 .sheet-enter > :nth-child(5) { animation-delay: 120ms; }
 .sheet-enter > :nth-child(n + 6) { animation-delay: 150ms; }
 
+/* Landing variant: slower and longer (400ms, 10px), because this is read
+   once on arrival rather than scanned repeatedly. Two children — the action
+   panes and the hero. The hero follows 100ms behind wherever it sits: second
+   on desktop, but first on mobile, where the grid reorders it to the top. */
+.landing-enter > * {
+  --enter-distance: 10px;
+  animation: sheet-enter 400ms ease-out both;
+}
+.landing-enter > :first-child { animation-delay: 100ms; }
+@media (min-width: 48rem) {
+  .landing-enter > :first-child { animation-delay: 0ms; }
+  .landing-enter > :nth-child(2) { animation-delay: 100ms; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .sheet-enter > * {
+  .sheet-enter > *,
+  .landing-enter > * {
     animation: none;
   }
 }
