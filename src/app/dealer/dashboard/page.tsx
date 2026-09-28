@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Dealer Dashboard — VoltFlow",
+  title: "Dealer Dashboard",
   description: "View and respond to open quote requests.",
 };
 

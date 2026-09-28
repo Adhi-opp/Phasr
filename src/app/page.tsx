@@ -4,11 +4,13 @@ import { ArrowRight } from "lucide-react";
 import { auth } from "@/auth";
 
 export const metadata: Metadata = {
-  title: "Electrical Wiring Marketplace | Get Dealer Quotes",
+  // absolute: the brand alone, bypassing the "%s | VoltFlow" template that
+  // would otherwise make it "VoltFlow | VoltFlow".
+  title: { absolute: "VoltFlow" },
   description:
     "Generate an engineer-grade electrical BOM for your build, or quote verified requirements from ready-to-buy contractors in your service area. Aligned with IS 732 standard practice, for NCR.",
   openGraph: {
-    title: "VoltFlow - Electrical Wiring Marketplace",
+    title: "VoltFlow",
     description:
       "Free IS 732-aligned BOM calculator plus competing wholesale quotes from verified local dealers.",
   },

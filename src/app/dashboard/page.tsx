@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Dashboard — VoltFlow",
+  title: "Dashboard",
   description: "View and manage your saved electrical estimates.",
 };
 
