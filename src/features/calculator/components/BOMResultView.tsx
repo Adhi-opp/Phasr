@@ -27,6 +27,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CountUp } from "@/components/count-up";
 import { Metric, Row, Section, SpecTable } from "@/components/spec-sheet";
 import { buildDistributionSchedule } from "../boardEngine";
 import { BoardScheduleView } from "./BoardScheduleView";
@@ -72,9 +73,18 @@ function PowerAndCost({ result }: { result: EnrichedBOMResult }) {
 
   return (
     <Section index={1} title="Power Load & Service" meta="Diversified per IS 732">
+      {/* Only the three figures a reader came for count up — the two loads
+          and the cost range. Supply and circuit count are facts, not
+          magnitudes, and animating them would be decoration. */}
       <div className="grid grid-cols-2 divide-y divide-slate-200 sm:grid-cols-4 sm:divide-y-0">
-        <Metric label="Connected Load" value={formatKw(result.totalConnectedLoadKw)} />
-        <Metric label="Max Demand" value={formatKw(result.maxDemandKw)} />
+        <Metric
+          label="Connected Load"
+          value={<CountUp value={result.totalConnectedLoadKw} format={formatKw} />}
+        />
+        <Metric
+          label="Max Demand"
+          value={<CountUp value={result.maxDemandKw} format={formatKw} />}
+        />
         <Metric
           label="Supply"
           value={isThreePhase ? "3-Phase" : "1-Phase"}
@@ -87,9 +97,9 @@ function PowerAndCost({ result }: { result: EnrichedBOMResult }) {
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p className="spec-label">Estimated Material + Labour</p>
           <p className="spec-num text-xl font-bold text-slate-900">
-            {formatINR(lowEstimate)}
+            <CountUp value={lowEstimate} format={formatINR} />
             <span className="mx-1.5 font-normal text-slate-400">–</span>
-            {formatINR(highEstimate)}
+            <CountUp value={highEstimate} format={formatINR} />
           </p>
         </div>
         <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
@@ -508,7 +518,7 @@ export function BOMResultView({
   });
 
   return (
-    <div className="space-y-3">
+    <div className="sheet-enter space-y-3">
       <PowerAndCost result={result} />
       <CableSchedule items={result.items} />
       <ConduitAndDistribution items={result.items} />
@@ -530,7 +540,7 @@ export function BOMResultView({
       <Collapsible defaultOpen={false}>
         <div className="border border-slate-200 bg-white">
           <CollapsibleTrigger className="flex w-full items-center justify-between border-b border-transparent px-3 py-2 data-[state=open]:border-slate-200">
-            <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-900">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Engineering Detail
             </span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />

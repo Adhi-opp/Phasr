@@ -418,7 +418,7 @@ export function RfqDetailClient({
         <div className="lg:col-span-2">
           <div className="sticky top-20 border border-slate-300 bg-white">
             <header className="flex items-baseline justify-between gap-2 border-b border-slate-300 bg-slate-50 px-3 py-2">
-              <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-900">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 {existingQuote ? "Your Bid" : "Submit Bid"}
               </span>
               {estimate != null && (

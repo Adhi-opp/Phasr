@@ -126,10 +126,19 @@
   }
 }
 
-@keyframes fade-in-up {
+/* ---------------------------------------------------------------------------
+   Sheet entrance
+   ---------------------------------------------------------------------------
+   Put .sheet-enter on the container; its direct children fade up in order,
+   30ms apart, 150ms each, so a six-block sheet is fully settled by ~300ms.
+   Anything slower reads as decoration on a screen people come to read.
+   Children past the sixth share the last delay rather than trailing on.
+   --------------------------------------------------------------------------- */
+
+@keyframes sheet-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(var(--enter-distance, 4px));
   }
   to {
     opacity: 1;
@@ -137,28 +146,19 @@
   }
 }
 
-.animate-fade-in-up {
-  animation: fade-in-up 0.6s ease-out both;
+.sheet-enter > * {
+  animation: sheet-enter 150ms cubic-bezier(0.2, 0, 0, 1) both;
 }
+.sheet-enter > :nth-child(2) { animation-delay: 30ms; }
+.sheet-enter > :nth-child(3) { animation-delay: 60ms; }
+.sheet-enter > :nth-child(4) { animation-delay: 90ms; }
+.sheet-enter > :nth-child(5) { animation-delay: 120ms; }
+.sheet-enter > :nth-child(n + 6) { animation-delay: 150ms; }
 
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.animate-fade-in {
-  animation: fade-in 0.8s ease-out both;
-}
-
-.hover-lift {
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-.hover-lift:hover {
-  border-color: oklch(0.596 0.145 163.225 / 40%);
-}
-
-/* Striped table rows */
-.table-striped tbody tr:nth-child(even) {
-  background: oklch(0.967 0.004 248.07 / 90%);
+@media (prefers-reduced-motion: reduce) {
+  .sheet-enter > * {
+    animation: none;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -189,9 +189,3 @@
   border-bottom: 1px solid var(--foreground);
   padding-bottom: 0.375rem;
 }
-
-/* Animation delay utilities */
-.delay-100 { animation-delay: 100ms; }
-.delay-200 { animation-delay: 200ms; }
-.delay-300 { animation-delay: 300ms; }
-.delay-500 { animation-delay: 500ms; }

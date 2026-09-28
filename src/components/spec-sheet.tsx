@@ -7,6 +7,9 @@
 // figures. Density over decoration — 1px rules, tight padding, no shadows, no
 // pill radii.
 //
+// Section headers recede (small, tracked, slate-500) so the figures under
+// them are the darkest thing on the sheet.
+//
 // These started as local helpers inside BOMResultView. They live here now so
 // the buyer's BOM sheet, the dealer's requisition and the dealer board cannot
 // drift into three dialects of the same idea.
@@ -38,7 +41,7 @@ export function Section({
           <span className="spec-num text-[11px] text-slate-400">
             {String(index).padStart(2, "0")}
           </span>
-          <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-900">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             {title}
           </span>
         </h3>
@@ -56,7 +59,8 @@ export function Metric({
   accent,
 }: {
   label: string;
-  value: string;
+  /** A string, or a <CountUp> for a headline figure. */
+  value: React.ReactNode;
   accent?: boolean;
 }) {
   return (
