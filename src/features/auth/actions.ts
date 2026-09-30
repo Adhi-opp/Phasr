@@ -8,23 +8,30 @@ import { z } from "zod";
 
 const registerRoleSchema = z.enum(["HOMEOWNER", "DEALER"]);
 
+// Public by design: registration and sign-in cannot require a session. They
+// are held instead to strict schemas. registerRoleSchema is the guard that
+// matters most — ADMIN is not a value a caller can ask for, whatever the
+// payload says. Emails cap at 254 (RFC 5321); passwords at 72, bcrypt's limit.
 const registerSchema = z
   .object({
     name: z.string().trim().min(2).max(120).optional().or(z.literal("")),
-    email: z.string().email(),
+    email: z.string().max(254).email(),
     password: z.string().min(8).max(72),
     confirmPassword: z.string().min(8).max(72),
     role: registerRoleSchema.optional(),
   })
+  .strict()
   .refine((data) => data.password === data.confirmPassword, {
     path: ["confirmPassword"],
     message: "Passwords do not match.",
   });
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
+const loginSchema = z
+  .object({
+    email: z.string().max(254).email(),
+    password: z.string().min(1).max(72),
+  })
+  .strict();
 
 export type RegisterUserInput = z.infer<typeof registerSchema>;
 export type LoginUserInput = z.infer<typeof loginSchema>;

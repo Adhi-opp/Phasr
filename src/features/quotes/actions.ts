@@ -2,7 +2,6 @@
 
 import { Prisma, QuoteRequestStatus } from "@prisma/client";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { runEstimate } from "@/features/calculator/runEstimate";
 import { WIRE_GRADES } from "@/features/quotes/wireGrade";
 import {
@@ -12,6 +11,7 @@ import {
 } from "@/features/quotes/validity";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { recordIdSchema, requireRole } from "@/lib/authz";
 import {
   sendNewRfqNotification,
   sendQuoteReceivedNotification,
@@ -20,18 +20,27 @@ import {
   sendAdminProjectSavedNotification,
 } from "@/lib/email";
 
-const submitQuoteSchema = z.object({
-  quoteRequestId: z.string().min(1),
-  clientRequestId: z.string().uuid(),
-  totalPrice: z.number().positive(),
-  brandOffered: z.string().trim().min(1).max(120),
-  // Stored as a plain String? column so a future grade needs no migration,
-  // but constrained here — the comparison matrix relies on a closed set.
-  wireGrade: z.enum(WIRE_GRADES).optional(),
-  deliveryDays: z.number().int().min(1).max(365).optional(),
-  details: z.string().trim().max(5000).optional(),
-  validUntil: z.coerce.date().optional(),
-});
+/** Far above any residential BOQ this engine produces (a 4BHK duplex is
+    ~₹2.2 lakh), so only a typo or a crafted payload reaches it. */
+const MAX_QUOTE_RUPEES = 1_00_00_000;
+
+// .strict(): an unknown key is an error, not silently dropped. validUntil used
+// to be accepted here, and no form ever sent it — the only caller who could
+// was one crafting the payload to hold a price for ten years, or to backdate
+// it. The validity window is platform policy, set in submitQuoteTransaction.
+const submitQuoteSchema = z
+  .object({
+    quoteRequestId: recordIdSchema,
+    clientRequestId: z.string().uuid(),
+    totalPrice: z.number().positive().max(MAX_QUOTE_RUPEES),
+    brandOffered: z.string().trim().min(1).max(120),
+    // Stored as a plain String? column so a future grade needs no migration,
+    // but constrained here — the comparison matrix relies on a closed set.
+    wireGrade: z.enum(WIRE_GRADES).optional(),
+    deliveryDays: z.number().int().min(1).max(365).optional(),
+    details: z.string().trim().max(5000).optional(),
+  })
+  .strict();
 const createQuoteRequestStatusSchema = z.enum(["DRAFT", "OPEN"]);
 
 export type SubmitQuoteInput = z.infer<typeof submitQuoteSchema>;
@@ -113,7 +122,12 @@ function sleep(ms: number): Promise<void> {
 
 function isRetryableSerializationError(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    return error.code === "P2034";
+    // P2002 (unique constraint) here means a concurrent submission — a
+    // double-click, a replayed request — committed first. Re-running the
+    // transaction sees that row and answers IDEMPOTENT or
+    // DUPLICATE_DEALER_QUOTE through the normal checks, instead of leaking
+    // the raw constraint error.
+    return error.code === "P2034" || error.code === "P2002";
   }
   if (error instanceof Error) {
     return /serialize|serialization|deadlock|40001/i.test(error.message);
@@ -256,11 +270,11 @@ async function submitQuoteTransaction(
           wireGrade: input.wireGrade ?? null,
           deliveryDays: input.deliveryDays ?? null,
           details: input.details ?? null,
-          // Defaulted, not left null. An open-ended quote asks the dealer to
-          // hold a copper-linked price indefinitely, which is a risk they
-          // cannot hedge — so the platform sets the window unless the dealer
-          // names a different one.
-          validUntil: input.validUntil ?? quoteValidUntilFrom(now),
+          // Always the platform's window, never the caller's. An open-ended
+          // quote asks the dealer to hold a copper-linked price indefinitely,
+          // a risk they cannot hedge; a caller-chosen date could stretch or
+          // backdate it.
+          validUntil: quoteValidUntilFrom(now),
         },
         select: { id: true },
       });
@@ -308,29 +322,24 @@ export async function createQuoteRequestAction(
   layout: unknown,
   requestedStatus: "DRAFT" | "OPEN"
 ): Promise<CreateQuoteRequestResult> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  // An allowlist, not "anyone but a dealer": a role added later gets no
+  // access here until someone decides it should.
+  const authz = await requireRole(BUYER_ROLES);
+  if (!authz.ok) {
     return {
       success: false,
-      errorCode: "UNAUTHENTICATED",
-      error: "You must be signed in to save a project.",
+      errorCode: authz.code,
+      error:
+        authz.code === "FORBIDDEN" ? "Dealer accounts cannot create quote requests." : authz.error,
     };
   }
 
-  if (session.user.role === "DEALER") {
-    return {
-      success: false,
-      errorCode: "FORBIDDEN",
-      error: "Dealer accounts cannot create quote requests.",
-    };
-  }
-
-  const ownerId = session.user.id;
+  const ownerId = authz.userId;
   const parsedStatus = createQuoteRequestStatusSchema.safeParse(requestedStatus);
   if (!parsedStatus.success) {
     return {
       success: false,
-      errorCode: "INTERNAL_ERROR",
+      errorCode: "VALIDATION_ERROR",
       error: "Invalid quote request status.",
     };
   }
@@ -368,9 +377,20 @@ export async function createQuoteRequestAction(
 
   try {
     const created = await prisma.$transaction(async (tx) => {
+      // The copper reading in force when this estimate was saved. Looked up
+      // here, never taken from the payload: a caller able to name the
+      // snapshot could pin their project to an older, cheaper copper rate.
+      // Null until an admin has recorded one.
+      const snapshot = await tx.priceSnapshot.findFirst({
+        where: { effectiveDate: { lte: now } },
+        orderBy: [{ effectiveDate: "desc" }, { createdAt: "desc" }],
+        select: { id: true },
+      });
+
       const project = await tx.project.create({
         data: {
           ownerId,
+          priceSnapshotId: snapshot?.id ?? null,
           projectName: `Estimate — ${savedAt}`,
           projectType: "RESIDENTIAL",
           status: quoteRequestStatus === "OPEN" ? "RFQ_SUBMITTED" : "ESTIMATED",
@@ -496,24 +516,16 @@ export async function createQuoteRequestAction(
 }
 
 export async function submitQuoteAction(raw: SubmitQuoteInput): Promise<SubmitQuoteResult> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authz = await requireRole(["DEALER"]);
+  if (!authz.ok) {
     return {
       success: false,
-      errorCode: "UNAUTHENTICATED",
-      error: "You must be signed in to submit a quote.",
+      errorCode: authz.code,
+      error: authz.code === "FORBIDDEN" ? "Only dealer accounts can submit quotes." : authz.error,
     };
   }
 
-  if (session.user.role !== "DEALER") {
-    return {
-      success: false,
-      errorCode: "FORBIDDEN",
-      error: "Only dealer accounts can submit quotes.",
-    };
-  }
-
-  const dealerId = session.user.id;
+  const dealerId = authz.userId;
   const parsed = submitQuoteSchema.safeParse(raw);
 
   if (!parsed.success) {
@@ -587,11 +599,17 @@ export async function submitQuoteAction(raw: SubmitQuoteInput): Promise<SubmitQu
         continue;
       }
 
-      const message = error instanceof Error ? error.message : "Unexpected quote submission error";
+      // Logged, not returned: a Prisma error message can carry table,
+      // column and constraint names, which a caller has no business seeing.
+      logger.error("Quote submission failed", {
+        error: error instanceof Error ? error.message : "Unknown",
+        dealerId,
+        quoteRequestId: parsed.data.quoteRequestId,
+      });
       return {
         success: false,
         errorCode: "INTERNAL_ERROR",
-        error: message,
+        error: "Quote submission failed. Please try again.",
       };
     }
   }
@@ -611,11 +629,28 @@ export type QuoteDecisionResult =
   | { success: true }
   | { success: false; error: string };
 
-export async function acceptQuoteAction(quoteId: string): Promise<QuoteDecisionResult> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "You must be signed in." };
-  }
+/** Who may act on quotes as a buyer. Ownership of the project is checked
+    again per quote; the role check only stops a dealer (or any future role)
+    from reaching that far. */
+const BUYER_ROLES = ["HOMEOWNER", "ADMIN"] as const;
+
+/** Role guard, then id validation — both before any query runs. */
+async function authorizeBuyerDecision(
+  rawQuoteId: unknown
+): Promise<{ ok: true; userId: string; quoteId: string } | { ok: false; error: string }> {
+  const authz = await requireRole(BUYER_ROLES);
+  if (!authz.ok) return { ok: false, error: authz.error };
+
+  const parsedId = recordIdSchema.safeParse(rawQuoteId);
+  if (!parsedId.success) return { ok: false, error: "Invalid quote id." };
+
+  return { ok: true, userId: authz.userId, quoteId: parsedId.data };
+}
+
+export async function acceptQuoteAction(rawQuoteId: string): Promise<QuoteDecisionResult> {
+  const guard = await authorizeBuyerDecision(rawQuoteId);
+  if (!guard.ok) return { success: false, error: guard.error };
+  const { userId, quoteId } = guard;
 
   for (let attempt = 0; attempt <= MAX_SERIALIZATION_RETRIES; attempt++) {
     try {
@@ -635,7 +670,7 @@ export async function acceptQuoteAction(quoteId: string): Promise<QuoteDecisionR
           });
 
           if (!quote) throw new Error("QUOTE_NOT_FOUND");
-          if (quote.quoteRequest.project.ownerId !== session.user.id)
+          if (quote.quoteRequest.project.ownerId !== userId)
             throw new Error("NOT_OWNER");
           if (quote.status !== "SUBMITTED")
             throw new Error("ALREADY_PROCESSED");
@@ -771,11 +806,10 @@ export async function acceptQuoteAction(quoteId: string): Promise<QuoteDecisionR
   return { success: false, error: "Failed to accept quote after retries. Please try again." };
 }
 
-export async function rejectQuoteAction(quoteId: string): Promise<QuoteDecisionResult> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "You must be signed in." };
-  }
+export async function rejectQuoteAction(rawQuoteId: string): Promise<QuoteDecisionResult> {
+  const guard = await authorizeBuyerDecision(rawQuoteId);
+  if (!guard.ok) return { success: false, error: guard.error };
+  const { userId, quoteId } = guard;
 
   for (let attempt = 0; attempt <= MAX_SERIALIZATION_RETRIES; attempt++) {
     try {
@@ -793,7 +827,7 @@ export async function rejectQuoteAction(quoteId: string): Promise<QuoteDecisionR
           });
 
           if (!quote) throw new Error("QUOTE_NOT_FOUND");
-          if (quote.quoteRequest.project.ownerId !== session.user.id)
+          if (quote.quoteRequest.project.ownerId !== userId)
             throw new Error("NOT_OWNER");
           if (quote.status !== "SUBMITTED")
             throw new Error("ALREADY_PROCESSED");
@@ -888,11 +922,10 @@ export async function rejectQuoteAction(quoteId: string): Promise<QuoteDecisionR
  * A SUBMITTED quote on a CLOSED or EXPIRED request *can* be hidden: nobody is
  * waiting on that any more, and stale rows are exactly what needs clearing.
  */
-export async function hideQuoteAction(quoteId: string): Promise<QuoteDecisionResult> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "You must be signed in." };
-  }
+export async function hideQuoteAction(rawQuoteId: string): Promise<QuoteDecisionResult> {
+  const guard = await authorizeBuyerDecision(rawQuoteId);
+  if (!guard.ok) return { success: false, error: guard.error };
+  const { userId, quoteId } = guard;
 
   try {
     const quote = await prisma.quote.findUnique({
@@ -913,7 +946,7 @@ export async function hideQuoteAction(quoteId: string): Promise<QuoteDecisionRes
       return { success: false, error: "Quote not found." };
     }
 
-    if (quote.quoteRequest.project.ownerId !== session.user.id) {
+    if (quote.quoteRequest.project.ownerId !== userId) {
       return { success: false, error: "You do not own this project." };
     }
 

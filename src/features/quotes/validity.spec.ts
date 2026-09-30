@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   QUOTE_EXPIRY_WARNING_HOURS,
-  QUOTE_VALIDITY_DAYS,
+  QUOTE_VALIDITY_HOURS,
   RFQ_LIFETIME_HOURS,
   effectiveRfqStatus,
   expiresWithinHours,
@@ -34,11 +34,21 @@ run("RFQ expiry is 72 hours out", () => {
   );
 });
 
-run("quote validity is 7 days out", () => {
-  assert.equal(QUOTE_VALIDITY_DAYS, 7);
+run("quote validity is 72 hours out", () => {
+  assert.equal(QUOTE_VALIDITY_HOURS, 72);
   assert.equal(
     quoteValidUntilFrom(NOW).getTime() - NOW.getTime(),
-    QUOTE_VALIDITY_DAYS * DAY
+    QUOTE_VALIDITY_HOURS * HOUR
+  );
+});
+
+run("the expiry warning covers only the tail of a quote's life", () => {
+  // A quote should not read "expiring soon" on the day it arrives.
+  assert.ok(QUOTE_EXPIRY_WARNING_HOURS < QUOTE_VALIDITY_HOURS / 2);
+  const dayOld = new Date(NOW.getTime() + 24 * HOUR);
+  assert.equal(
+    expiresWithinHours(quoteValidUntilFrom(NOW), QUOTE_EXPIRY_WARNING_HOURS, dayOld),
+    false
   );
 });
 

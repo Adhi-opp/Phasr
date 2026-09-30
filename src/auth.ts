@@ -6,9 +6,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "@/auth.config";
 
+// Not .strict(): NextAuth adds its own keys (csrfToken, callbackUrl) to the
+// credentials object. Only these two are read.
 const credentialsSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().max(254).email(),
+  password: z.string().min(1).max(72),
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

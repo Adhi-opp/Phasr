@@ -29,6 +29,7 @@ import {
   wireGradeShort,
   type WireGrade,
 } from "@/features/quotes/wireGrade";
+import { QUOTE_VALIDITY_HOURS } from "@/features/quotes/validity";
 import {
   Field,
   Metric,
@@ -575,7 +576,7 @@ export function RfqDetailClient({
                 </div>
 
                 <p className="text-[11px] leading-relaxed text-slate-500">
-                  Your price is held for 7 days from submission. The buyer sees
+                  Your price is held for {QUOTE_VALIDITY_HOURS} hours from submission. The buyer sees
                   it alongside competing bids with your brand and grade.
                 </p>
 

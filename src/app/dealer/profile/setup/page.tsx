@@ -55,6 +55,7 @@ export default function DealerProfileSetupPage() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [reverification, setReverification] = useState(false);
 
   const [form, setForm] = useState<DealerProfileInput>({
     companyName: "",
@@ -96,7 +97,9 @@ export default function DealerProfileSetupPage() {
         return;
       }
       setSuccess(true);
-      setTimeout(() => router.push("/dealer/dashboard"), 1200);
+      setReverification(result.reverification);
+      // Longer when approval was withdrawn: that message has to be read.
+      setTimeout(() => router.push("/dealer/dashboard"), result.reverification ? 4000 : 1200);
     });
   }
 
@@ -129,9 +132,15 @@ export default function DealerProfileSetupPage() {
           {error}
         </p>
       )}
-      {success && (
+      {success && !reverification && (
         <p className="mb-3 border border-emerald-300 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
           Profile saved. Redirecting to your dashboard…
+        </p>
+      )}
+      {success && reverification && (
+        <p className="mb-3 border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+          Profile saved. Your company name or GSTIN changed, so your account is back in
+          review. You can bid again once an admin re-verifies it.
         </p>
       )}
 

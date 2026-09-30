@@ -8,7 +8,7 @@
     "build:local": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx src/features/calculator/calculateBOM.spec.ts && tsx src/features/calculator/costEngine.spec.ts && tsx src/features/calculator/boardEngine.spec.ts && tsx src/features/calculator/marketAudit.spec.ts && tsx src/features/calculator/whatsappExport.spec.ts && tsx src/features/quotes/validity.spec.ts",
+    "test": "tsx src/features/calculator/calculateBOM.spec.ts && tsx src/features/calculator/costEngine.spec.ts && tsx src/features/calculator/boardEngine.spec.ts && tsx src/features/calculator/marketAudit.spec.ts && tsx src/features/calculator/whatsappExport.spec.ts && tsx src/features/quotes/validity.spec.ts && tsx src/features/admin/priceSnapshot.spec.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
