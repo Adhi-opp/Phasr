@@ -131,14 +131,23 @@ model Project {
   inputData        Json             
   bomData          Json?            
   totalEstimate    Float?
-  
+
+  // The copper index this estimate was priced against, so a saved BOQ can be
+  // re-read at the rate it was generated with rather than today's. Optional:
+  // projects saved before snapshots existed have none. Only ever set
+  // server-side when a project is created — never taken from a payload, or a
+  // caller could pin a quote to a stale, cheaper copper rate.
+  priceSnapshotId  String?
+  priceSnapshot    PriceSnapshot?   @relation(fields: [priceSnapshotId], references: [id], onDelete: Restrict)
+
   quoteRequest     QuoteRequest?
-  
+
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
   @@index([ownerId])
   @@index([status])
+  @@index([priceSnapshotId])
 }
 
 model QuoteRequest {
@@ -193,11 +202,50 @@ model Quote {
   isHidden         Boolean      @default(false)
 
   createdAt        DateTime     @default(now())
+  // Always set by the server (72 hours, see features/quotes/validity.ts) and
+  // never accepted from a payload. Nullable only for quotes that predate it.
   validUntil       DateTime?
+
+  // Per-SKU pricing. totalPrice stays as the headline figure the matrix sorts
+  // on; lines let a buyer check that the brand and grade quoted are the ones
+  // delivered. Quotes submitted before lines existed have none.
+  quoteLines       QuoteLine[]
 
   @@index([dealerId])
   @@index([quoteRequestId])
+  // One quote per dealer per RFQ, enforced by the database and not only by the
+  // check in submitQuoteTransaction: a double-click or a replayed request that
+  // races past the check still cannot create a second row.
   @@unique([quoteRequestId, dealerId])
+}
+
+model QuoteLine {
+  id                   String   @id @default(cuid())
+  quoteId              String
+  quote                Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  componentDescription String   // e.g. "Polycab 1.5 sq mm FR 90 m"
+  quantity             Int
+  unitPrice            Float
+  totalPrice           Float
+
+  @@index([quoteId])
+}
+
+// A copper index reading. Rows are append-only history: a new rate is a new
+// row with a later effectiveDate, never an update, so any project can be
+// re-priced exactly as it was quoted. onDelete: Restrict on Project keeps a
+// snapshot from being removed while a project still points at it.
+model PriceSnapshot {
+  id             String    @id @default(cuid())
+  baseCopperRate Float     // ₹ per kg; convert an LME $/t reading before storing
+  effectiveDate  DateTime  // when the rate applied in the market
+  source         String    // e.g. "MCX" or "LME"
+  createdAt      DateTime  @default(now()) // when it was recorded
+
+  projects       Project[]
+
+  @@index([effectiveDate])
 }
 
 model RegulatoryPhasePolicy {

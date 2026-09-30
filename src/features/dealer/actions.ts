@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -9,6 +9,9 @@ import { logger } from "@/lib/logger";
 // Schemas
 // ---------------------------------------------------------------------------
 
+// .strict(): the form sends exactly these keys, so anything else is a crafted
+// payload. Fields are also mapped one by one below, never spread into Prisma,
+// so an extra key like approvalStatus could not reach the database either way.
 const dealerProfileSchema = z.object({
   companyName: z.string().trim().min(2, "Company name is required").max(200),
   gstin: z
@@ -28,14 +31,22 @@ const dealerProfileSchema = z.object({
     .string()
     .trim()
     .regex(/^[1-9][0-9]{5}$/, "Enter a valid 6-digit pincode"),
-  serviceAreas: z.string().trim().min(1, "At least one service area is required"),
-  brandsSold: z.string().trim().min(1, "At least one brand is required"),
-});
+  // Comma-separated, split into arrays below. Bounded so a single request
+  // cannot store an unbounded array on the profile.
+  serviceAreas: z.string().trim().min(1, "At least one service area is required").max(1000),
+  brandsSold: z.string().trim().min(1, "At least one brand is required").max(500),
+}).strict();
 
 export type DealerProfileInput = z.infer<typeof dealerProfileSchema>;
 
 export type SaveDealerProfileResult =
-  | { success: true; profileId: string }
+  | {
+      success: true;
+      profileId: string;
+      /** The company name or GSTIN changed, so approval was withdrawn and the
+          profile is back in the admin queue. */
+      reverification: boolean;
+    }
   | { success: false; error: string };
 
 // ---------------------------------------------------------------------------
@@ -45,14 +56,15 @@ export type SaveDealerProfileResult =
 export async function saveDealerProfileAction(
   raw: DealerProfileInput
 ): Promise<SaveDealerProfileResult> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "You must be signed in." };
+  const authz = await requireRole(["DEALER", "ADMIN"]);
+  if (!authz.ok) {
+    return {
+      success: false,
+      error:
+        authz.code === "FORBIDDEN" ? "Only dealer accounts can set up a dealer profile." : authz.error,
+    };
   }
-
-  if (session.user.role !== "DEALER" && session.user.role !== "ADMIN") {
-    return { success: false, error: "Only dealer accounts can set up a dealer profile." };
-  }
+  const userId = authz.userId;
 
   const parsed = dealerProfileSchema.safeParse(raw);
   if (!parsed.success) {
@@ -74,33 +86,62 @@ export async function saveDealerProfileAction(
   const gstin = data.gstin || null;
 
   try {
-    const profile = await prisma.dealerProfile.upsert({
-      where: { userId: session.user.id },
-      update: {
-        companyName: data.companyName,
-        gstin,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode,
-        serviceAreas,
-        brandsSold,
-      },
-      create: {
-        userId: session.user.id,
-        companyName: data.companyName,
-        gstin,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode,
-        serviceAreas,
-        brandsSold,
-      },
-      select: { id: true },
+    const { profileId, reverification } = await prisma.$transaction(async (tx) => {
+      const existing = await tx.dealerProfile.findUnique({
+        where: { userId },
+        select: { companyName: true, gstin: true, approvalStatus: true },
+      });
+
+      // Approval vouches for one legal identity. A new company name or GSTIN
+      // is, as far as that check is concerned, a different business — so it
+      // goes back to the queue. submitQuoteTransaction refuses bids from any
+      // profile that is not APPROVED, so bidding stops in the same write.
+      // Address, service areas and brands are operational details and stay
+      // editable without re-review.
+      const identityChanged =
+        existing !== null &&
+        (existing.companyName !== data.companyName || existing.gstin !== gstin);
+
+      const profile = await tx.dealerProfile.upsert({
+        where: { userId },
+        update: {
+          companyName: data.companyName,
+          gstin,
+          address: data.address,
+          city: data.city,
+          state: data.state,
+          pincode: data.pincode,
+          serviceAreas,
+          brandsSold,
+          ...(identityChanged ? { approvalStatus: "PENDING" as const } : {}),
+        },
+        create: {
+          userId,
+          companyName: data.companyName,
+          gstin,
+          address: data.address,
+          city: data.city,
+          state: data.state,
+          pincode: data.pincode,
+          serviceAreas,
+          brandsSold,
+        },
+        select: { id: true },
+      });
+
+      return {
+        profileId: profile.id,
+        reverification: identityChanged && existing.approvalStatus !== "PENDING",
+      };
     });
 
-    return { success: true, profileId: profile.id };
+    if (reverification) {
+      logger.info("Dealer identity changed; approval withdrawn pending re-verification", {
+        userId,
+      });
+    }
+
+    return { success: true, profileId, reverification };
   } catch (err) {
     if (
       err instanceof Error &&
@@ -111,7 +152,7 @@ export async function saveDealerProfileAction(
     }
     logger.error("Failed to save dealer profile", {
       error: err instanceof Error ? err.message : "Unknown",
-      userId: session.user.id,
+      userId,
     });
     return { success: false, error: "Failed to save profile. Please try again." };
   }

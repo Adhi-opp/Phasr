@@ -14,22 +14,24 @@
 //     span a weekend. Enforced in submitQuoteTransaction, which already
 //     rejected expired requests — the field was simply never being set.
 //
-//   QUOTE_VALIDITY_DAYS (7)
+//   QUOTE_VALIDITY_HOURS (72)
 //     How long a dealer's price is binding. Copper is the volatile half of
-//     this BOM (cable is ~48% of material cost), so an open-ended quote asks
-//     the dealer to absorb a commodity swing they cannot hedge. A week is the
-//     usual counter-offer window in NCR trade practice.
+//     this BOM (cable is ~55% of material cost) and list prices were revised
+//     every few weeks through 2026, so an open-ended quote asks the dealer to
+//     absorb a commodity swing they cannot hedge. 48–72 hours is the window
+//     dealers will actually hold a copper-linked price for; a week was not.
+//     Always set by the server — submitQuoteSchema does not accept a date.
 // ============================================================================
 
 export const RFQ_LIFETIME_HOURS = 72;
-export const QUOTE_VALIDITY_DAYS = 7;
+export const QUOTE_VALIDITY_HOURS = 72;
 
 export function rfqExpiryFrom(now: Date = new Date()): Date {
   return new Date(now.getTime() + RFQ_LIFETIME_HOURS * 60 * 60 * 1000);
 }
 
 export function quoteValidUntilFrom(now: Date = new Date()): Date {
-  return new Date(now.getTime() + QUOTE_VALIDITY_DAYS * 24 * 60 * 60 * 1000);
+  return new Date(now.getTime() + QUOTE_VALIDITY_HOURS * 60 * 60 * 1000);
 }
 
 /**
@@ -59,8 +61,10 @@ export function expiresWithinHours(
   return isExpired(deadline, new Date(now.getTime() + hours * 60 * 60 * 1000));
 }
 
-/** How close to lapsing a quote has to be before the matrix flags it. */
-export const QUOTE_EXPIRY_WARNING_HOURS = 48;
+/** How close to lapsing a quote has to be before the matrix flags it. The
+    final third of the 72-hour window; at 48 hours a quote would read as
+    expiring soon a day after it arrived. */
+export const QUOTE_EXPIRY_WARNING_HOURS = 24;
 
 /**
  * The status a buyer should actually see.

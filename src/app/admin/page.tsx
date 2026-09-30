@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CopperRateForm } from "./CopperRateForm";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -39,6 +40,7 @@ export default async function AdminDashboardPage() {
     quoteCount,
     acceptedRevenue,
     pendingDealers,
+    latestSnapshot,
   ] = await Promise.all([
     prisma.user.groupBy({ by: ["role"], _count: true }),
     prisma.project.count(),
@@ -50,6 +52,10 @@ export default async function AdminDashboardPage() {
       _sum: { totalPrice: true },
     }),
     prisma.dealerProfile.count({ where: { approvalStatus: "PENDING" } }),
+    prisma.priceSnapshot.findFirst({
+      orderBy: [{ effectiveDate: "desc" }, { createdAt: "desc" }],
+      select: { baseCopperRate: true, source: true, effectiveDate: true },
+    }),
   ]);
 
   const roleMap = Object.fromEntries(
@@ -99,6 +105,26 @@ export default async function AdminDashboardPage() {
           </Link>
         </div>
       )}
+
+      <section className="mb-6 space-y-2 border border-slate-200 px-4 py-3">
+        <p className="text-sm text-slate-600">
+          Copper index:{" "}
+          {latestSnapshot ? (
+            <span className="font-medium tabular-nums text-slate-900">
+              {formatCurrency(latestSnapshot.baseCopperRate)}/kg · {latestSnapshot.source} ·{" "}
+              {latestSnapshot.effectiveDate.toLocaleString("en-IN", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </span>
+          ) : (
+            <span className="font-medium text-amber-700">
+              none recorded — new projects are saved without one
+            </span>
+          )}
+        </p>
+        <CopperRateForm />
+      </section>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (

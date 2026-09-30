@@ -19,9 +19,11 @@ resets what it touches, but it **mutates the seeded database** — re-run
 
 ## The action IDs will go stale
 
-`run.mjs` invokes server actions by the opaque ID Next.js assigns them. Those
-IDs are derived from the build, so **they change whenever the relevant source
-changes** and the harness will start decoding `null` instead of a result.
+`run.mjs` invokes server actions by the opaque ID Next.js assigns them. The
+IDs are derived from each action's file path and export name, not its body:
+a full rewrite of `features/quotes/actions.ts` (Sep 2026) left every ID
+unchanged. **Renaming or moving an action changes its ID**, and the harness
+then decodes `null` instead of a result.
 
 To refresh them:
 
