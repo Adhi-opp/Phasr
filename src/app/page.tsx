@@ -4,11 +4,13 @@ import { ArrowRight } from "lucide-react";
 import { auth } from "@/auth";
 
 export const metadata: Metadata = {
-  title: "Electrical Wiring Marketplace | Get Dealer Quotes",
+  // absolute: the brand alone, bypassing the "%s | VoltFlow" template that
+  // would otherwise make it "VoltFlow | VoltFlow".
+  title: { absolute: "VoltFlow" },
   description:
     "Generate an engineer-grade electrical BOM for your build, or quote verified requirements from ready-to-buy contractors in your service area. Aligned with IS 732 standard practice, for NCR.",
   openGraph: {
-    title: "VoltFlow - Electrical Wiring Marketplace",
+    title: "VoltFlow",
     description:
       "Free IS 732-aligned BOM calculator plus competing wholesale quotes from verified local dealers.",
   },
@@ -65,7 +67,7 @@ function EntryPane({
   return (
     <Link
       href={href}
-      className="group block border border-slate-200 bg-white px-5 py-4 transition-colors hover:border-slate-400"
+      className="group block border border-slate-200 bg-white px-5 py-4 transition-colors duration-150 ease-out hover:border-slate-400"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -77,7 +79,7 @@ function EntryPane({
             {note}
           </p>
         </div>
-        <ArrowRight className="mt-0.5 size-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-slate-900" />
+        <ArrowRight className="mt-0.5 size-4 shrink-0 text-slate-300 transition-[transform,color] duration-150 ease-out group-hover:translate-x-1 group-hover:text-slate-900" />
       </div>
     </Link>
   );
@@ -105,7 +107,10 @@ export default async function Home() {
   return (
     <main className="min-h-[calc(100vh-3.5rem)] w-full bg-slate-50">
       <div className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 md:py-24">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:items-start md:gap-14">
+        {/* landing-enter: the two columns fade up, hero 100ms behind the
+            panes. Plain CSS, so it runs from first paint — no JavaScript to
+            wait for before the page is visible. */}
+        <div className="landing-enter grid grid-cols-1 gap-10 md:grid-cols-2 md:items-start md:gap-14">
           {/* ── Left: the two doors ──────────────────────────────────────
               order-last on mobile so a first-time visitor reads what this
               is before being asked to choose a path. On desktop the grid

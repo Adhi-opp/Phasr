@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL || "https://voltflow.in"
   ),
   title: {
-    default: "VoltFlow — Electrical BOM Calculator & Marketplace",
+    default: "VoltFlow",
     template: "%s | VoltFlow",
   },
   description:

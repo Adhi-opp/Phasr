@@ -25,6 +25,7 @@ import {
   APPLIANCE_LOADS_WATTS,
   ELECTRICAL_CONSTANTS,
   VOLTAGE_DROP,
+  BOQ_DISCLAIMER,
   type WireGaugeKey,
 } from "./constants";
 import {
@@ -764,10 +765,7 @@ feederCurrentAmps *= 1.25;
   return {
     generatedAt: new Date().toISOString(),
     algorithmVersion: ALGORITHM_VERSION,
-    disclaimer:
-      "This is an algorithmic estimate for reference and dealer quoting purposes only. " +
-      "Final specifications MUST be verified by a licensed electrical professional before installation. " +
-      "Actual requirements may vary based on site conditions, wall routing, and local regulations.",
+    disclaimer: BOQ_DISCLAIMER,
 
     totalConnectedLoadKw: Math.round(totalConnectedLoadKw * 100) / 100,
     maxDemandKw: Math.round(maxDemandKw * 100) / 100,

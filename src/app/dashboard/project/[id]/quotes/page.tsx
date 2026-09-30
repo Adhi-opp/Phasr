@@ -21,7 +21,7 @@ import {
 import { QuotesClient } from "./QuotesClient";
 
 export const metadata: Metadata = {
-  title: "Compare Quotes — VoltFlow",
+  title: "Compare Quotes",
 };
 
 /** Reformat old-style project names ("Saved Estimate YYYY-MM-DD HH:MM:SS") */

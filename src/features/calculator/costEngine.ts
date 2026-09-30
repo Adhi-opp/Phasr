@@ -1,3 +1,12 @@
+// src/features/calculator/costEngine.ts
+// ============================================================================
+// COST ENGINE — materials only
+// ============================================================================
+// VoltFlow prices what gets bought, never who installs it. Labour is a
+// negotiation over one person's day rate; a material price is checkable
+// against a dealer's list, and that is the only claim this engine makes.
+// ============================================================================
+
 import type { BOMItem, BOMResult, PricingCode } from "./type";
 
 type RateBasis = "per_meter" | "per_piece";
@@ -7,26 +16,6 @@ interface RateCardEntry {
   rate: number;
   basis: RateBasis;
   source: RateSource;
-}
-
-interface LaborInputs {
-  lightingPoints: number;
-  power15APoints: number;
-  heavyCircuits: number;
-  cookingCircuits: number;
-  conduitMeters: number;
-  extraFloors: number;
-}
-
-interface LaborBreakdown {
-  baseVisit: number;
-  lightingPoints: number;
-  power15APoints: number;
-  heavyCircuits: number;
-  cookingCircuits: number;
-  conduitMeters: number;
-  extraFloors: number;
-  wiringModeMultiplier: number;
 }
 
 export class PricingDataError extends Error {
@@ -41,45 +30,89 @@ export class PricingDataError extends Error {
 }
 
 /**
- * Grade uplift from standard FR wire to FRLS / ZHFR.
+ * Discount off printed MRP at which a dealer buys, by spend category.
  *
- * This applies to the cable line only — conduit, switchgear and labour do not
- * move with wire grade or copper. Deriving the upper bound from actual cable
- * spend rather than a flat multiple on the total keeps the range honest: a
- * 3BHK runs roughly 48% cable, so this lands near +14% on the total, but a
- * switchgear-heavy job correctly shows a tighter band.
+ * RATE_CARD (and PriceIndex) hold that dealer rate — the reference price — so
+ * MRP is derived by grossing each line up — trade / (1 − discount) — never by
+ * discounting the rate card again, which would double-count the discount.
+ *
+ *   cable  37%  Dealer net on branded house wire runs roughly 30–40% below
+ *               MRP (derived from the Technopak channel study in RR Kabel's
+ *               2023 IPO filing). 37% puts the derived MRP on the printed
+ *               price of Polycab Etira FR 90 m coils in Sep 2026: ₹3,690 for
+ *               1.5 sq mm, ₹5,890 for 2.5 sq mm.
+ *   other  25%  Switchgear (MCB/RCCB/DB), conduit and wiring accessories. No
+ *               sourced channel data; the midpoint of the 20–30% dealers
+ *               typically quote. Unverified.
  */
-const WIRE_GRADE_PREMIUM = 0.3;
+export const TRADE_DISCOUNT = {
+  cable: 0.37,
+  other: 0.25,
+} as const;
+
+/** When the cable rates below were last checked against printed MRPs. Copper
+    moves list prices every few weeks, so a reference price is shown with
+    its date or not at all. */
+export const CABLE_RATES_AS_OF = "Sep 2026";
+
+/** Where the material money goes. Every priced line lands in exactly one. */
+export type SpendCategory = "cable" | "protection" | "conduit" | "accessories";
+
+function spendCategoryOf(item: BOMItem): SpendCategory {
+  switch (item.category) {
+    case "WIRE":
+    case "EARTH_WIRE":
+      return "cable";
+    case "MCB":
+    case "RCCB":
+    case "MAIN_SWITCH":
+    case "DB":
+      return "protection";
+    case "CONDUIT":
+      return "conduit";
+    case "SWITCHGEAR":
+      return "accessories";
+  }
+}
 
 export type EnrichedBOMResult = BOMResult & {
+  // Every saved project's bomData is a stored copy of this object, and the
+  // dashboards read materialCost from it — so materialCost keeps its name.
+  // Rows saved before labour was removed still carry laborCost,
+  // totalEstimate and the grade range; nothing reads them any more.
   pricing: {
+    /** Material cost at dealer trade rates. */
     materialCost: number;
-    laborCost: number;
-    totalEstimate: number;
-    laborBreakdown: LaborBreakdown;
     surplusMetersTotal: number;
     surplusValueTotal: number;
 
-    /** Cable spend alone — the copper- and grade-sensitive portion. */
+    /** The same figure as materialCost: the reference price every quote is
+        measured against in the market audit. */
+    wholesaleTradeEstimate: number;
+    /** The same materials at printed MRP, whole rupees. A ceiling price that
+        is rarely paid in full, never a savings baseline. */
+    totalMrp: number;
+    /** Trade-rate spend by category; the four sum to materialCost. */
     cableCost: number;
-    /** cableCost / materialCost. Drives the width of the range below. */
-    cableSharePct: number;
-    /** Standard FR grade at current rates. */
-    lowEstimate: number;
-    /** Same BOM specified in FRLS / ZHFR. */
-    highEstimate: number;
+    protectionCost: number;
+    conduitCost: number;
+    /** Modular switches, sockets and regulators. */
+    accessoriesCost: number;
   };
 };
 
 export const RATE_CARD: Record<PricingCode, RateCardEntry> = {
-  // Wires (Per Meter)
-  WIRE_1_5: { rate: 18, basis: "per_meter", source: "FINAL" },
-  WIRE_2_5: { rate: 28, basis: "per_meter", source: "FINAL" },
-  WIRE_4_0: { rate: 48, basis: "per_meter", source: "FINAL" },
-  WIRE_6_0: { rate: 72, basis: "per_meter", source: "FINAL" },
-  WIRE_10_0: { rate: 118, basis: "per_meter", source: "PROVISIONAL" },
-  WIRE_16_0: { rate: 178, basis: "per_meter", source: "PROVISIONAL" },
-  EARTH_WIRE_2_5: { rate: 28, basis: "per_meter", source: "FINAL" },
+  // Wires (Per Meter) — printed MRP per metre × (1 − TRADE_DISCOUNT.cable).
+  // 1.5 and 2.5 come from quoted MRPs. 4.0 and up scale the MRP by copper
+  // cross-section (~₹9,300 and ~₹13,800 per 90 m coil for 4.0 and 6.0),
+  // derived rather than quoted, so PROVISIONAL.
+  WIRE_1_5: { rate: 26, basis: "per_meter", source: "FINAL" },
+  WIRE_2_5: { rate: 41, basis: "per_meter", source: "FINAL" },
+  WIRE_4_0: { rate: 65, basis: "per_meter", source: "PROVISIONAL" },
+  WIRE_6_0: { rate: 97, basis: "per_meter", source: "PROVISIONAL" },
+  WIRE_10_0: { rate: 161, basis: "per_meter", source: "PROVISIONAL" },
+  WIRE_16_0: { rate: 258, basis: "per_meter", source: "PROVISIONAL" },
+  EARTH_WIRE_2_5: { rate: 41, basis: "per_meter", source: "FINAL" },
 
   // Conduits (Per Meter)
   CONDUIT_20: { rate: 35, basis: "per_meter", source: "FINAL" },
@@ -105,17 +138,6 @@ export const RATE_CARD: Record<PricingCode, RateCardEntry> = {
   FAN_REGULATOR_2M: { rate: 450, basis: "per_piece", source: "FINAL" },
 };
 
-const LABOR_RATE_CARD = {
-  baseVisit: 3000,
-  lightingPoint: 150,
-  power15APoint: 230,
-  heavyCircuit: 950,
-  cookingCircuit: 1400,
-  conduitMeter: 10,
-  extraFloor: 1200,
-  wiringModeMultiplier: 1.0,
-} as const;
-
 function getMeterQuantity(item: BOMItem): number {
   if (item.category === "WIRE" || item.category === "EARTH_WIRE" || item.category === "CONDUIT") {
     return item.totalMeters;
@@ -136,67 +158,6 @@ function getPieceQuantity(item: BOMItem): number {
   return 0;
 }
 
-function extractLaborInputs(result: BOMResult): LaborInputs {
-  const lightingPoints = result.circuits
-    .filter((circuit) => circuit.circuitType === "LIGHTING")
-    .reduce((sum, circuit) => sum + circuit.pointCount, 0);
-
-  const power15APoints = result.circuits
-    .filter((circuit) => circuit.circuitType === "POWER_15A")
-    .reduce((sum, circuit) => sum + circuit.pointCount, 0);
-
-  const heavyCircuits = result.circuits.filter(
-    (circuit) => circuit.circuitType === "HEAVY_APPLIANCE"
-  ).length;
-
-  const cookingCircuits = result.circuits.filter(
-    (circuit) => circuit.circuitType === "COOKING_RANGE"
-  ).length;
-
-  const conduitMeters = result.items
-    .filter((item) => item.category === "CONDUIT")
-    .reduce((sum, item) => sum + item.totalMeters, 0);
-
-  const uniqueFloors = new Set(result.circuits.map((circuit) => circuit.floor));
-  const extraFloors = Math.max(0, uniqueFloors.size - 1);
-
-  return {
-    lightingPoints,
-    power15APoints,
-    heavyCircuits,
-    cookingCircuits,
-    conduitMeters,
-    extraFloors,
-  };
-}
-
-function computeLabor(inputs: LaborInputs): { laborCost: number; laborBreakdown: LaborBreakdown } {
-  const preMultiplier =
-    LABOR_RATE_CARD.baseVisit +
-    inputs.lightingPoints * LABOR_RATE_CARD.lightingPoint +
-    inputs.power15APoints * LABOR_RATE_CARD.power15APoint +
-    inputs.heavyCircuits * LABOR_RATE_CARD.heavyCircuit +
-    inputs.cookingCircuits * LABOR_RATE_CARD.cookingCircuit +
-    inputs.conduitMeters * LABOR_RATE_CARD.conduitMeter +
-    inputs.extraFloors * LABOR_RATE_CARD.extraFloor;
-
-  const laborCost = Math.round(preMultiplier * LABOR_RATE_CARD.wiringModeMultiplier);
-
-  return {
-    laborCost,
-    laborBreakdown: {
-      baseVisit: LABOR_RATE_CARD.baseVisit,
-      lightingPoints: inputs.lightingPoints * LABOR_RATE_CARD.lightingPoint,
-      power15APoints: inputs.power15APoints * LABOR_RATE_CARD.power15APoint,
-      heavyCircuits: inputs.heavyCircuits * LABOR_RATE_CARD.heavyCircuit,
-      cookingCircuits: inputs.cookingCircuits * LABOR_RATE_CARD.cookingCircuit,
-      conduitMeters: inputs.conduitMeters * LABOR_RATE_CARD.conduitMeter,
-      extraFloors: inputs.extraFloors * LABOR_RATE_CARD.extraFloor,
-      wiringModeMultiplier: LABOR_RATE_CARD.wiringModeMultiplier,
-    },
-  };
-}
-
 export type RateCard = Record<PricingCode, RateCardEntry>;
 
 export function applyPricing(
@@ -204,9 +165,15 @@ export function applyPricing(
   rateCard: RateCard = RATE_CARD
 ): EnrichedBOMResult {
   let materialCost = 0;
-  let cableCost = 0;
   let surplusMetersTotal = 0;
   let surplusValueTotal = 0;
+  let totalMrp = 0;
+  const spend: Record<SpendCategory, number> = {
+    cable: 0,
+    protection: 0,
+    conduit: 0,
+    accessories: 0,
+  };
   const missingCodes = new Set<PricingCode>();
 
   for (const item of result.items) {
@@ -217,47 +184,40 @@ export function applyPricing(
       continue;
     }
 
-    if (priceConfig.basis === "per_meter") {
-      const lineCost = priceConfig.rate * getMeterQuantity(item);
-      materialCost += lineCost;
+    const lineCost =
+      priceConfig.basis === "per_meter"
+        ? priceConfig.rate * getMeterQuantity(item)
+        : priceConfig.rate * getPieceQuantity(item);
 
-      if (item.category === "WIRE" || item.category === "EARTH_WIRE") {
-        cableCost += lineCost;
-        surplusMetersTotal += item.surplusMeters;
-        surplusValueTotal += item.surplusMeters * priceConfig.rate;
-      }
-      continue;
+    const category = spendCategoryOf(item);
+    materialCost += lineCost;
+    spend[category] += lineCost;
+    totalMrp +=
+      lineCost /
+      (1 - (category === "cable" ? TRADE_DISCOUNT.cable : TRADE_DISCOUNT.other));
+
+    if (item.category === "WIRE" || item.category === "EARTH_WIRE") {
+      surplusMetersTotal += item.surplusMeters;
+      surplusValueTotal += item.surplusMeters * priceConfig.rate;
     }
-
-    materialCost += priceConfig.rate * getPieceQuantity(item);
   }
 
   if (missingCodes.size > 0) {
     throw new PricingDataError(Array.from(missingCodes).sort());
   }
 
-  const { laborCost, laborBreakdown } = computeLabor(extractLaborInputs(result));
-  const totalEstimate = materialCost + laborCost;
-
-  // Range, not a single number. The low bound is this BOM in standard FR
-  // cable; the high bound is the same BOM specified in FRLS/ZHFR. Only the
-  // cable line moves, so the band widens or narrows with cable share.
-  const lowEstimate = totalEstimate;
-  const highEstimate = totalEstimate + cableCost * WIRE_GRADE_PREMIUM;
-
   return {
     ...result,
     pricing: {
       materialCost,
-      laborCost,
-      totalEstimate,
-      laborBreakdown,
       surplusMetersTotal,
       surplusValueTotal,
-      cableCost,
-      cableSharePct: materialCost > 0 ? cableCost / materialCost : 0,
-      lowEstimate,
-      highEstimate,
+      wholesaleTradeEstimate: materialCost,
+      totalMrp: Math.round(totalMrp),
+      cableCost: spend.cable,
+      protectionCost: spend.protection,
+      conduitCost: spend.conduit,
+      accessoriesCost: spend.accessories,
     },
   };
 }

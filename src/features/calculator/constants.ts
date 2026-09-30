@@ -557,3 +557,16 @@ export const ELECTRICAL_CONSTANTS = {
   // Three-phase threshold: IS 732 recommends 3-phase for loads > 5kW
   THREE_PHASE_THRESHOLD_KW: 5,
 } as const;
+
+// ---------------------------------------------------------------------------
+// 15. BOQ DISCLAIMER
+//     One string for the engine's result and the results page footer, so a
+//     saved estimate shows the current wording rather than the one stored
+//     with it. VoltFlow cannot be the certifying party: installations must be
+//     executed and certified by a licensed contractor under CEA regulations.
+// ---------------------------------------------------------------------------
+
+export const BOQ_DISCLAIMER =
+  "DISCLAIMER: Indicative BOQ for procurement only. Final circuit design, " +
+  "protection coordination, and installation must be verified by a licensed " +
+  "electrical contractor per IS 732 / NEC regulations.";

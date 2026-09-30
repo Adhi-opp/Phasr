@@ -8,7 +8,7 @@ import type { CircuitDefinition } from "@/features/calculator/type";
 import { RfqDetailClient, type BomSnapshot } from "./RfqDetailClient";
 
 export const metadata: Metadata = {
-  title: "Quote Request — VoltFlow",
+  title: "Quote Request",
 };
 
 // ---------------------------------------------------------------------------

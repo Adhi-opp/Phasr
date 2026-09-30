@@ -7,6 +7,9 @@
 // figures. Density over decoration — 1px rules, tight padding, no shadows, no
 // pill radii.
 //
+// Section headers recede (small, tracked, slate-500) so the figures under
+// them are the darkest thing on the sheet.
+//
 // These started as local helpers inside BOMResultView. They live here now so
 // the buyer's BOM sheet, the dealer's requisition and the dealer board cannot
 // drift into three dialects of the same idea.
@@ -19,14 +22,16 @@
 // away if that is the call — but it should be all of it, not half.
 // ============================================================================
 
-/** Numbered, ruled section container. */
+/** Ruled section container. Numbered when it is part of a schedule; an
+    analysis block that sits alongside one (the market audit) leaves index off
+    so it does not renumber the schedule around it. */
 export function Section({
   index,
   title,
   meta,
   children,
 }: {
-  index: number;
+  index?: number;
   title: string;
   meta?: string;
   children: React.ReactNode;
@@ -35,10 +40,12 @@ export function Section({
     <section className="border border-slate-200 bg-white">
       <header className="flex items-baseline justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2">
         <h3 className="flex items-baseline gap-2">
-          <span className="spec-num text-[11px] text-slate-400">
-            {String(index).padStart(2, "0")}
-          </span>
-          <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-900">
+          {index != null && (
+            <span className="spec-num text-[11px] text-slate-400">
+              {String(index).padStart(2, "0")}
+            </span>
+          )}
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             {title}
           </span>
         </h3>
@@ -56,7 +63,8 @@ export function Metric({
   accent,
 }: {
   label: string;
-  value: string;
+  /** A string, or a <CountUp> for a headline figure. */
+  value: React.ReactNode;
   accent?: boolean;
 }) {
   return (
