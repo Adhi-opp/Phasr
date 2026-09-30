@@ -18,6 +18,10 @@
 //
 // Run with: npx prisma db seed
 //
+// DEV DATABASES ONLY. Production is a separate Supabase project that is never
+// seeded — see the two guards below, which refuse a production process and a
+// database that already has real users.
+//
 // NOTE ON OLD ROWS — earlier seeds used @wiremart.in addresses. Those users
 // still exist in any database seeded before the rename. This script does not
 // delete them, because deleting users cascades to their projects and quotes.
@@ -34,6 +38,16 @@ import { calculateBOM } from "../src/features/calculator/calculateBOM";
 import { applyPricing } from "../src/features/calculator/costEngine";
 import { buildCalculatorInput } from "../src/features/calculator/generateRoomSpecs";
 import type { LayoutInput } from "../src/features/calculator/layoutTypes";
+
+// ── Guard 1: never from a production process ──────────────────────────────
+// Vercel builds run with NODE_ENV=production. The build script only calls
+// `prisma migrate deploy`, which never seeds, so this should never fire — it
+// is here so that stays true if `migrate reset` or `db seed` is ever added to
+// the pipeline. Exits 0 so a blocked seed does not fail a deploy.
+if (process.env.NODE_ENV === "production") {
+  console.warn("Seed blocked in production");
+  process.exit(0);
+}
 
 const prisma = new PrismaClient();
 
@@ -65,6 +79,29 @@ function formatINR(amount: number): string {
 }
 
 async function main() {
+  // ── Guard 2: never into a database that has real users ──────────────────
+  // Guard 1 cannot see the likelier accident: running `npx prisma db seed` on
+  // your own machine while .env points at the production database. NODE_ENV
+  // is unset there, so it passes. This checks the database instead. A dev
+  // database is either empty (first seed) or already holds the seed admin; one
+  // with users but no seed admin is a real database, and seeding it would
+  // plant a login whose password is published in this repo.
+  const [userCount, seedAdmin] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.findUnique({
+      where: { email: "admin@voltflow.in" },
+      select: { id: true },
+    }),
+  ]);
+
+  if (userCount > 0 && !seedAdmin) {
+    console.error(
+      `Seed blocked: this database has ${userCount} user(s) and has never been seeded, so it is not a dev database. Nothing was written.`
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   const pw = await hash("password123", 12);
   const now = new Date();
 
