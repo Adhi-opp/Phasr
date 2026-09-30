@@ -10,10 +10,15 @@
 // loose metres — because "450 m of 2.5 sq mm" is not something anyone can
 // order over a counter.
 //
-// Three sections, in the order a job is specified:
+// In the order a job is specified:
 //   1. Power load & service   — what the supply has to carry
+//   ·  Market audit           — the only cost summary: reference price and
+//                               the fair ceiling a quote is checked against
 //   2. Cable schedule         — what gets pulled
 //   3. Conduit & distribution — what it runs through and terminates in
+//   4. Board schedule         — which breaker protects what
+//
+// Materials only throughout. VoltFlow does not price labour.
 //
 // Circuit schedule and per-room load sit below, collapsed by default.
 // ============================================================================
@@ -30,7 +35,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CountUp } from "@/components/count-up";
 import { Metric, Row, Section, SpecTable } from "@/components/spec-sheet";
 import { buildDistributionSchedule } from "../boardEngine";
+import { BOQ_DISCLAIMER } from "../constants";
 import { BoardScheduleView } from "./BoardScheduleView";
+import { MarketAuditPane } from "./MarketAuditPane";
 import type { EnrichedBOMResult } from "../costEngine";
 import type { BOMItem } from "../type";
 
@@ -42,40 +49,22 @@ function formatKw(kw: number): string {
   return `${kw.toFixed(2)} kW`;
 }
 
-function formatINR(amount: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function gaugeLabel(sizeSqMm: number): string {
   return `${sizeSqMm.toFixed(1)} mm²`;
-}
-
-/**
- * Strips the engine's parenthetical purpose out of a description:
- * "1.5 sq mm FR PVC Copper Wire (Lighting)" -> "Lighting".
- */
-function purposeOf(description: string): string {
-  const match = description.match(/\(([^)]+)\)\s*$/);
-  return match ? match[1] : "—";
 }
 
 // ---------------------------------------------------------------------------
 // Section 1 — Power load & service
 // ---------------------------------------------------------------------------
 
-function PowerAndCost({ result }: { result: EnrichedBOMResult }) {
+function PowerLoad({ result }: { result: EnrichedBOMResult }) {
   const isThreePhase = result.phaseDecision.finalRecommendation === "THREE";
-  const { lowEstimate, highEstimate, cableSharePct } = result.pricing;
 
   return (
     <Section index={1} title="Power Load & Service" meta="Diversified per IS 732">
-      {/* Only the three figures a reader came for count up — the two loads
-          and the cost range. Supply and circuit count are facts, not
-          magnitudes, and animating them would be decoration. */}
+      {/* The two loads count up; supply and circuit count are facts, not
+          magnitudes, and animating them would be decoration. Cost lives in
+          the market audit below — this section carries none. */}
       <div className="grid grid-cols-2 divide-y divide-slate-200 sm:grid-cols-4 sm:divide-y-0">
         <Metric
           label="Connected Load"
@@ -91,23 +80,6 @@ function PowerAndCost({ result }: { result: EnrichedBOMResult }) {
           accent={isThreePhase}
         />
         <Metric label="Circuits" value={String(result.totalCircuits)} />
-      </div>
-
-      <div className="border-t border-slate-200 px-3 py-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="spec-label">Estimated Material + Labour</p>
-          <p className="spec-num text-xl font-bold text-slate-900">
-            <CountUp value={lowEstimate} format={formatINR} />
-            <span className="mx-1.5 font-normal text-slate-400">–</span>
-            <CountUp value={highEstimate} format={formatINR} />
-          </p>
-        </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-          Lower bound is standard FR cable at current trade rates. Upper bound is
-          the same schedule in FRLS/ZHFR. Cable is{" "}
-          <span className="spec-num">{(cableSharePct * 100).toFixed(0)}%</span> of
-          material here, so grade and copper movement drive the spread.
-        </p>
       </div>
     </Section>
   );
@@ -136,7 +108,9 @@ function CableSchedule({ items }: { items: BOMItem[] }) {
 
   return (
     <Section index={2} title="Cable Schedule" meta={`${totalCoils} coils total`}>
-      <SpecTable head={["Gauge", "Purpose", "Required", "Purchase", "Surplus"]}>
+      {/* No purpose column: the engine merges every run of one gauge into a
+          single line, so a gauge has no one purpose to show. */}
+      <SpecTable head={["Gauge", "Required", "Purchase", "Surplus"]} minWidth={420}>
         {cables.map((cable, idx) => (
           <Row key={idx}>
             <td className="px-3 py-2">
@@ -148,9 +122,6 @@ function CableSchedule({ items }: { items: BOMItem[] }) {
                   Earth
                 </span>
               )}
-            </td>
-            <td className="px-3 py-2 text-right text-slate-600">
-              {cable.category === "EARTH_WIRE" ? "Earthing" : purposeOf(cable.description)}
             </td>
             <td className="spec-num px-3 py-2 text-right text-slate-600">
               {cable.totalMeters.toFixed(0)} m
@@ -519,7 +490,10 @@ export function BOMResultView({
 
   return (
     <div className="sheet-enter space-y-3">
-      <PowerAndCost result={result} />
+      <PowerLoad result={result} />
+      {/* The only cost summary on the sheet, directly above the parts tables
+          whose prices it adds up. */}
+      <MarketAuditPane pricing={result.pricing} />
       <CableSchedule items={result.items} />
       <ConduitAndDistribution items={result.items} />
       <BoardScheduleView schedule={schedule} sectionIndex={4} />
@@ -566,13 +540,18 @@ export function BOMResultView({
         </div>
       </Collapsible>
 
-      <p className="text-[11px] leading-relaxed text-slate-500">
-        {result.disclaimer} · Algorithm v{result.algorithmVersion} ·{" "}
-        {new Date(result.generatedAt).toLocaleString("en-IN", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        })}
-      </p>
+      <footer className="space-y-1">
+        <p className="spec-num text-[11px] text-slate-400">
+          Algorithm v{result.algorithmVersion} ·{" "}
+          {new Date(result.generatedAt).toLocaleString("en-IN", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </p>
+        {/* The constant, not result.disclaimer: a saved estimate carries the
+            wording it was generated with, and the page must show today's. */}
+        <p className="font-mono text-xs leading-relaxed text-slate-500">{BOQ_DISCLAIMER}</p>
+      </footer>
     </div>
   );
 }

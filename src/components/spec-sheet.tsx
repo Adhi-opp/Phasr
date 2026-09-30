@@ -22,14 +22,16 @@
 // away if that is the call — but it should be all of it, not half.
 // ============================================================================
 
-/** Numbered, ruled section container. */
+/** Ruled section container. Numbered when it is part of a schedule; an
+    analysis block that sits alongside one (the market audit) leaves index off
+    so it does not renumber the schedule around it. */
 export function Section({
   index,
   title,
   meta,
   children,
 }: {
-  index: number;
+  index?: number;
   title: string;
   meta?: string;
   children: React.ReactNode;
@@ -38,9 +40,11 @@ export function Section({
     <section className="border border-slate-200 bg-white">
       <header className="flex items-baseline justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2">
         <h3 className="flex items-baseline gap-2">
-          <span className="spec-num text-[11px] text-slate-400">
-            {String(index).padStart(2, "0")}
-          </span>
+          {index != null && (
+            <span className="spec-num text-[11px] text-slate-400">
+              {String(index).padStart(2, "0")}
+            </span>
+          )}
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             {title}
           </span>

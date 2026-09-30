@@ -27,7 +27,7 @@ export const DEMO_DASHBOARD_PROJECTS = [
     bomData: {
       totalConnectedLoadKw: 6.5,
       maxDemandKw: 4.2,
-      pricing: { totalEstimate: 85000 },
+      pricing: { materialCost: 85000 },
     },
     totalEstimate: 85000,
     createdAt: new Date(),

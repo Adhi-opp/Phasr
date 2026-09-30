@@ -50,6 +50,7 @@ import { PresetCards } from "./PresetCards";
 import { CalculatorForm } from "./CalculatorForm";
 import { BOMResultView } from "./BOMResultView";
 import { generateEstimateAction } from "../actions";
+import { formatBomForWhatsApp, whatsappShareUrl } from "../whatsappExport";
 import type { EnrichedBOMResult } from "../costEngine";
 import type { EstimateActionErrorCode } from "../actions";
 import type { LayoutInput } from "../layoutTypes";
@@ -370,7 +371,7 @@ export function CalculatorShell() {
           {/* Result — dimmed + spinner badge while recalculating, full when idle */}
           {result && (
             <div className={isPending ? "pointer-events-none opacity-50 transition-opacity" : "transition-opacity"}>
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold">Bill of Materials</h2>
                   <p className="text-sm text-muted-foreground">
@@ -379,7 +380,22 @@ export function CalculatorShell() {
                       : "No circuits generated"}
                   </p>
                 </div>
-                {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                <div className="flex items-center gap-2">
+                  {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  {/* The material list as a WhatsApp chit — for sending to a
+                      dealer directly, with or without an account. */}
+                  <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                    <a
+                      href={whatsappShareUrl(
+                        formatBomForWhatsApp(result, process.env.NEXT_PUBLIC_APP_URL)
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Export WhatsApp Spec
+                    </a>
+                  </Button>
+                </div>
               </div>
               <BOMResultView
                 result={result}

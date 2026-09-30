@@ -23,7 +23,9 @@ export const metadata: Metadata = {
 interface BomDataSnapshot {
   totalConnectedLoadKw: number;
   maxDemandKw: number;
-  pricing: { totalEstimate: number };
+  // materialCost, not totalEstimate: every estimate ever saved has it, and
+  // VoltFlow no longer prices labour, so it is the one comparable figure.
+  pricing: { materialCost: number };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -36,19 +38,19 @@ function parseBomData(raw: unknown): BomDataSnapshot | null {
   const pricing = raw.pricing;
   if (!isRecord(pricing)) return null;
 
-  const totalEstimate = pricing.totalEstimate;
+  const materialCost = pricing.materialCost;
   const totalConnectedLoadKw = raw.totalConnectedLoadKw;
   const maxDemandKw = raw.maxDemandKw;
 
   if (
-    typeof totalEstimate !== "number" ||
+    typeof materialCost !== "number" ||
     typeof totalConnectedLoadKw !== "number" ||
     typeof maxDemandKw !== "number"
   ) {
     return null;
   }
 
-  return { totalConnectedLoadKw, maxDemandKw, pricing: { totalEstimate } };
+  return { totalConnectedLoadKw, maxDemandKw, pricing: { materialCost } };
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +174,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     Demand
                   </th>
                   <th className="spec-label px-3 py-2 text-right font-medium">
-                    Estimate
+                    Trade Estimate
                   </th>
                   <th className="spec-label px-3 py-2 text-right font-medium">
                     Status
@@ -186,7 +188,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 {projects.map((project) => {
                   const bom = parseBomData(project.bomData);
                   const estimate =
-                    bom?.pricing.totalEstimate ?? project.totalEstimate;
+                    bom?.pricing.materialCost ?? project.totalEstimate;
                   const qr = project.quoteRequest;
                   const statusConfig =
                     qr?.status in QUOTE_STATUS_CONFIG

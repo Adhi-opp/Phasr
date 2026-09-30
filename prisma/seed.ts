@@ -356,20 +356,19 @@ async function main() {
   // that do not match that shape are ignored, and non-wire items (MCBs,
   // conduit, switchgear) always use the hardcoded rates.
   //
-  // These values intentionally match the RATE_CARD entries marked FINAL, so
-  // seeding changes no estimate. They are EFFECTIVE trade prices, i.e. after
-  // the dealer discount circular, not MRP.
+  // These values intentionally match the wire rates in RATE_CARD, so seeding
+  // changes no estimate. They are dealer rates (the reference price), not MRP.
   //
-  // NOTE: verify against a current dealer circular before trusting these. An
-  // alternative set was proposed at 1.5→26, 2.5→42, 4.0→64, which looks like
-  // MRP before the 40-55% trade discount. Adopting it would raise every
-  // estimate by roughly 20%, since wire is about half of material cost.
+  // Sep 2026: raised from 18/28/48/72. The printed MRP of a Polycab Etira FR
+  // 90 m coil is ₹3,690 for 1.5 sq mm and ₹5,890 for 2.5 sq mm — ₹41 and ₹65 a
+  // metre — and dealers buy roughly 30–40% below that, so the old rates sat
+  // under any dealer's own cost. See TRADE_DISCOUNT in costEngine.ts.
 
   const wireRates = [
-    { wireType: "1.5 sq mm FR PVC", brand: "Polycab", unitPrice: 18 },
-    { wireType: "2.5 sq mm FR PVC", brand: "Polycab", unitPrice: 28 },
-    { wireType: "4.0 sq mm FR PVC", brand: "Polycab", unitPrice: 48 },
-    { wireType: "6.0 sq mm FR PVC", brand: "Polycab", unitPrice: 72 },
+    { wireType: "1.5 sq mm FR PVC", brand: "Polycab", unitPrice: 26 },
+    { wireType: "2.5 sq mm FR PVC", brand: "Polycab", unitPrice: 41 },
+    { wireType: "4.0 sq mm FR PVC", brand: "Polycab", unitPrice: 65 },
+    { wireType: "6.0 sq mm FR PVC", brand: "Polycab", unitPrice: 97 },
   ];
 
   for (const rate of wireRates) {
