@@ -549,17 +549,10 @@ export function BOMResultView({
 
       {/* Fine print: proportional type, no box. Monospace ran the same
           sentence to five lines on a phone. */}
-      <footer className="space-y-0.5 pt-1 text-xs leading-snug text-slate-500">
+      <footer className="pt-1 text-xs leading-snug text-slate-500">
         {/* The constant, not result.disclaimer: a saved estimate carries the
             wording it was generated with, and the page must show today's. */}
         <p>{BOQ_DISCLAIMER}</p>
-        <p className="text-slate-400">
-          Algorithm v{result.algorithmVersion} ·{" "}
-          {new Date(result.generatedAt).toLocaleString("en-IN", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
-        </p>
       </footer>
     </div>
   );
