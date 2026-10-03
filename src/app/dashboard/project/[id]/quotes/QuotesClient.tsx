@@ -2,10 +2,15 @@
 
 // QuotesClient
 // ============================================================================
-// A comparison matrix, not a card grid. The whole job of this screen is
-// answering "which of these is actually better", and that means every quote's
-// price, brand and delivery sitting in the same column so the eye can scan
-// down instead of across. Cards made the reader hold four numbers in memory.
+// A comparison matrix on desktop, a card per quote on a phone.
+//
+// The matrix is the point of this screen at desk width: every quote's price,
+// brand and delivery in the same column, so the eye scans down instead of
+// across. At phone width the same eight columns needed a sideways swipe to
+// reach the price and the Accept button — the two things the buyer came for —
+// so below md each quote becomes a bordered card with the price and a
+// full-width Accept instead. Both layouts read from the same describe() so
+// they can never disagree about what a quote allows.
 //
 // Quotes arrive pre-sorted by price ascending from the server.
 // ============================================================================
@@ -21,6 +26,7 @@ import {
   wireGradeDescription,
   wireGradeShort,
 } from "@/features/quotes/wireGrade";
+import { BusyLabel } from "@/components/busy-label";
 import { Button } from "@/components/ui/button";
 
 interface QuoteData {
@@ -56,6 +62,8 @@ interface Props {
   demoMode?: boolean;
 }
 
+type PendingAction = { id: string; kind: "accept" | "reject" };
+
 /**
  * Mirrors the guard in hideQuoteAction. Kept in sync deliberately: the server
  * is the authority, but offering a button that always errors is its own bug.
@@ -84,6 +92,10 @@ function formatDate(iso: string): string {
   );
 }
 
+function pct(part: number, whole: number): string {
+  return `${((part / whole) * 100).toFixed(0)}%`;
+}
+
 function StatusPill({ status }: { status: string }) {
   const style =
     status === "ACCEPTED"
@@ -101,6 +113,72 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+function LowestBadge() {
+  return (
+    <span className="border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
+      Lowest
+    </span>
+  );
+}
+
+function GradeChip({ grade }: { grade: string | null }) {
+  const short = wireGradeShort(grade);
+  if (!short) return <span className="text-slate-400">—</span>;
+  return (
+    <span
+      className="spec-num border border-slate-300 px-1.5 py-0.5 text-[11px] font-medium"
+      title={wireGradeDescription(grade) ?? undefined}
+    >
+      {short}
+    </span>
+  );
+}
+
+/** Validity is a deadline, so a lapsed or nearly lapsed one is coloured. */
+function Validity({ quote }: { quote: QuoteData }) {
+  if (!quote.validUntil) return <span className="text-slate-400">—</span>;
+  return (
+    <span
+      className={
+        quote.hasLapsed
+          ? "font-medium text-destructive"
+          : quote.expiresSoon
+            ? "font-medium text-amber-700"
+            : "text-slate-500"
+      }
+    >
+      {quote.hasLapsed ? "Lapsed" : formatDate(quote.validUntil)}
+    </span>
+  );
+}
+
+/** Remove is deliberately quiet — housekeeping, not a decision. */
+function RemoveButton({
+  dealerName,
+  disabled,
+  onClick,
+}: {
+  dealerName: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      size="icon-sm"
+      variant="ghost"
+      className="h-7 w-7 text-slate-400 hover:text-destructive"
+      onClick={onClick}
+      disabled={disabled}
+      title="Remove from this comparison"
+      aria-label={`Remove the quote from ${dealerName}`}
+    >
+      <Trash2 className="size-3.5" />
+    </Button>
+  );
+}
+
+const LAPSED_HINT = "This price has lapsed — ask the dealer to requote.";
+
 export function QuotesClient({
   quotes: initialQuotes,
   projectEstimate,
@@ -110,29 +188,30 @@ export function QuotesClient({
   const [quotes, setQuotes] = useState(initialQuotes);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [actionId, setActionId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   function runAction(
     quoteId: string,
+    kind: PendingAction["kind"],
     action: typeof acceptQuoteAction,
     apply: (prev: QuoteData[]) => QuoteData[]
   ) {
     setError(null);
-    setActionId(quoteId);
+    setPendingAction({ id: quoteId, kind });
     startTransition(async () => {
       const result = await action(quoteId);
       if (!result.success) {
         setError(result.error);
-        setActionId(null);
+        setPendingAction(null);
         return;
       }
       setQuotes(apply);
-      setActionId(null);
+      setPendingAction(null);
     });
   }
 
   function handleAccept(quoteId: string) {
-    runAction(quoteId, acceptQuoteAction, (prev) =>
+    runAction(quoteId, "accept", acceptQuoteAction, (prev) =>
       prev.map((q) => ({
         ...q,
         status:
@@ -146,7 +225,7 @@ export function QuotesClient({
   }
 
   function handleReject(quoteId: string) {
-    runAction(quoteId, rejectQuoteAction, (prev) =>
+    runAction(quoteId, "reject", rejectQuoteAction, (prev) =>
       prev.map((q) => (q.id === quoteId ? { ...q, status: "REJECTED" } : q))
     );
   }
@@ -184,6 +263,27 @@ export function QuotesClient({
 
   const acceptedQuote = quotes.find((q) => q.status === "ACCEPTED");
 
+  /** Everything both layouts need to know about one quote. */
+  function describe(quote: QuoteData) {
+    const isSubmitted = quote.status === "SUBMITTED";
+    const isRejected = quote.status === "REJECTED";
+    const isMine = (kind: PendingAction["kind"]) =>
+      isPending && pendingAction?.id === quote.id && pendingAction.kind === kind;
+    return {
+      isSubmitted,
+      isRejected,
+      isAccepted: quote.status === "ACCEPTED",
+      isLowest: lowest !== null && quote.totalPrice === lowest && !isRejected,
+      delta: lowest !== null && !isRejected ? quote.totalPrice - lowest : null,
+      /** Accept/Reject on offer. Mirrors acceptQuoteAction's guards, so the
+          buyer is never handed a button the server will refuse. */
+      decidable: isSubmitted && !hasAccepted,
+      removable: canRemove(quote.status, rfqStatus),
+      accepting: isMine("accept"),
+      rejecting: isMine("reject"),
+    };
+  }
+
   if (quotes.length === 0) {
     // Distinguish "none arrived" from "you removed them all" — the second is
     // a state the user created, and telling them dealers have been notified
@@ -204,6 +304,9 @@ export function QuotesClient({
     );
   }
 
+  const estimateDelta =
+    projectEstimate != null && lowest !== null ? lowest - projectEstimate : null;
+
   return (
     <div className="space-y-3">
       {error && (
@@ -212,9 +315,144 @@ export function QuotesClient({
         </p>
       )}
 
-      <div className="border border-slate-200 bg-white">
+      {/* ── Phones: one card per quote ──────────────────────────────────── */}
+      <ul className="space-y-2 md:hidden">
+        {quotes.map((quote) => {
+          const d = describe(quote);
+          return (
+            <li
+              key={quote.id}
+              className={`border px-3 py-3 ${
+                d.isAccepted ? "border-emerald-300 bg-emerald-50/60" : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`font-medium ${d.isRejected ? "text-slate-400" : "text-slate-900"}`}
+                    >
+                      {quote.dealerName}
+                    </span>
+                    {d.isLowest && d.isSubmitted && <LowestBadge />}
+                  </div>
+                  {quote.dealerCity && (
+                    <p className="text-[11px] text-slate-500">{quote.dealerCity}</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {!d.decidable && <StatusPill status={quote.status} />}
+                  {d.removable && (
+                    <RemoveButton
+                      dealerName={quote.dealerName}
+                      disabled={isPending}
+                      onClick={() => handleRemove(quote.id)}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <p
+                className={`mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] ${
+                  d.isRejected ? "text-slate-400" : "text-slate-600"
+                }`}
+              >
+                Brand:{" "}
+                <span className={d.isRejected ? "" : "text-slate-900"}>{quote.brandOffered}</span>
+                <span aria-hidden="true" className="text-slate-300">
+                  |
+                </span>
+                Grade: <GradeChip grade={quote.wireGrade} />
+              </p>
+
+              <div className="mt-2 flex items-baseline justify-between gap-3">
+                <span className="spec-label">Total (ex-GST)</span>
+                <span
+                  className={`spec-num text-lg font-semibold ${
+                    d.isRejected ? "text-slate-400 line-through" : "text-slate-900"
+                  }`}
+                >
+                  {formatINR(quote.totalPrice)}
+                </span>
+              </div>
+              <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-x-3 text-[11px] text-slate-500">
+                <span className="spec-num">
+                  {d.delta ? `+${formatINR(d.delta)} vs lowest` : ""}
+                </span>
+                <span>
+                  Delivery{" "}
+                  <span className="spec-num">
+                    {quote.deliveryDays != null ? `${quote.deliveryDays} d` : "—"}
+                  </span>{" "}
+                  · Valid until <Validity quote={quote} />
+                </span>
+              </div>
+
+              {d.decidable && (
+                <div className="mt-3 space-y-2">
+                  <Button
+                    className="w-full"
+                    onClick={() => handleAccept(quote.id)}
+                    disabled={isPending || quote.hasLapsed}
+                    aria-busy={d.accepting}
+                  >
+                    <BusyLabel busy={d.accepting} busyText="Accepting…">
+                      Accept Quote
+                    </BusyLabel>
+                  </Button>
+                  {quote.hasLapsed && (
+                    <p className="text-[11px] text-destructive">{LAPSED_HINT}</p>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => handleReject(quote.id)}
+                    disabled={isPending}
+                    aria-busy={d.rejecting}
+                  >
+                    <BusyLabel busy={d.rejecting} busyText="Rejecting…">
+                      Reject
+                    </BusyLabel>
+                  </Button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {live.length > 1 && lowest !== null && (
+        <dl className="space-y-1 border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] md:hidden">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="spec-label">{live.length} live quotes · lowest</dt>
+            <dd className="spec-num font-semibold text-slate-900">{formatINR(lowest)}</dd>
+          </div>
+          {spread !== null && spread > 0 && (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="spec-label">Spread</dt>
+              <dd className="spec-num text-slate-600">
+                {formatINR(spread)} <span className="text-slate-400">({pct(spread, lowest)})</span>
+              </dd>
+            </div>
+          )}
+          {estimateDelta !== null && projectEstimate != null && (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="spec-label">vs your estimate</dt>
+              <dd
+                className={`spec-num ${estimateDelta <= 0 ? "text-emerald-700" : "text-amber-700"}`}
+              >
+                {estimateDelta <= 0 ? "−" : "+"}
+                {formatINR(Math.abs(estimateDelta))} ({pct(Math.abs(estimateDelta), projectEstimate)})
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      {/* ── md and up: the comparison matrix ────────────────────────────── */}
+      <div className="hidden border border-slate-200 bg-white md:block">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-[13px]">
+          <table className="w-full min-w-[720px] text-[13px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="spec-label px-3 py-2 text-left font-medium">
@@ -248,26 +486,14 @@ export function QuotesClient({
             </thead>
             <tbody>
               {quotes.map((quote) => {
-                const isSubmitted = quote.status === "SUBMITTED";
-                const isRejected = quote.status === "REJECTED";
-                const isAccepted = quote.status === "ACCEPTED";
-                const isLowest =
-                  lowest !== null && quote.totalPrice === lowest && !isRejected;
-                const delta =
-                  lowest !== null && !isRejected ? quote.totalPrice - lowest : null;
-                const isProcessing = isPending && actionId === quote.id;
-                // Mirrors the guard in acceptQuoteAction. Offering Accept on a
-                // price the server will refuse is a dead end the buyer only
-                // discovers after clicking.
-                const { hasLapsed, expiresSoon } = quote;
-
+                const d = describe(quote);
                 return (
                   <tr
                     key={quote.id}
                     className={`border-b border-slate-100 last:border-b-0 ${
-                      isAccepted
+                      d.isAccepted
                         ? "bg-emerald-50/60"
-                        : isRejected
+                        : d.isRejected
                           ? "text-slate-400"
                           : "hover:bg-slate-50/70"
                     }`}
@@ -275,15 +501,11 @@ export function QuotesClient({
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <span
-                          className={`font-medium ${isRejected ? "text-slate-400" : "text-slate-900"}`}
+                          className={`font-medium ${d.isRejected ? "text-slate-400" : "text-slate-900"}`}
                         >
                           {quote.dealerName}
                         </span>
-                        {isLowest && isSubmitted && (
-                          <span className="border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
-                            Lowest
-                          </span>
-                        )}
+                        {d.isLowest && d.isSubmitted && <LowestBadge />}
                       </div>
                       {quote.dealerCity && (
                         <span className="text-[11px] text-slate-500">
@@ -293,30 +515,17 @@ export function QuotesClient({
                     </td>
                     <td className="px-3 py-2.5">{quote.brandOffered}</td>
                     <td className="px-3 py-2.5">
-                      {wireGradeShort(quote.wireGrade) ? (
-                        <span
-                          className="spec-num border border-slate-300 px-1.5 py-0.5 text-[11px] font-medium"
-                          title={wireGradeDescription(quote.wireGrade) ?? undefined}
-                        >
-                          {wireGradeShort(quote.wireGrade)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                      <GradeChip grade={quote.wireGrade} />
                     </td>
                     <td
                       className={`spec-num px-3 py-2.5 text-right font-semibold ${
-                        isRejected ? "line-through" : "text-slate-900"
+                        d.isRejected ? "line-through" : "text-slate-900"
                       }`}
                     >
                       {formatINR(quote.totalPrice)}
                     </td>
                     <td className="spec-num px-3 py-2.5 text-right text-slate-500">
-                      {delta === null
-                        ? "—"
-                        : delta === 0
-                          ? "—"
-                          : `+${formatINR(delta)}`}
+                      {d.delta ? `+${formatINR(d.delta)}` : "—"}
                     </td>
                     <td className="spec-num px-3 py-2.5 text-right text-slate-600">
                       {quote.deliveryDays != null ? `${quote.deliveryDays} d` : "—"}
@@ -325,38 +534,23 @@ export function QuotesClient({
                       className="px-3 py-2.5 text-right text-[11px]"
                       title={`Quoted ${formatDate(quote.createdAt)}`}
                     >
-                      {quote.validUntil ? (
-                        <span
-                          className={
-                            hasLapsed
-                              ? "font-medium text-destructive"
-                              : expiresSoon
-                                ? "font-medium text-amber-700"
-                                : "text-slate-500"
-                          }
-                        >
-                          {hasLapsed ? "Lapsed" : formatDate(quote.validUntil)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                      <Validity quote={quote} />
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        {isSubmitted && !hasAccepted ? (
+                        {d.decidable ? (
                           <>
                             <Button
                               size="sm"
                               className="h-7 px-2.5 text-xs"
                               onClick={() => handleAccept(quote.id)}
-                              disabled={isPending || hasLapsed}
-                              title={
-                                hasLapsed
-                                  ? "This price has lapsed — ask the dealer to requote."
-                                  : undefined
-                              }
+                              disabled={isPending || quote.hasLapsed}
+                              aria-busy={d.accepting}
+                              title={quote.hasLapsed ? LAPSED_HINT : undefined}
                             >
-                              {isProcessing ? "…" : "Accept"}
+                              <BusyLabel busy={d.accepting} busyText="Accepting…">
+                                Accept
+                              </BusyLabel>
                             </Button>
                             <Button
                               size="sm"
@@ -364,29 +558,25 @@ export function QuotesClient({
                               className="h-7 px-2.5 text-xs"
                               onClick={() => handleReject(quote.id)}
                               disabled={isPending}
+                              aria-busy={d.rejecting}
                             >
-                              Reject
+                              <BusyLabel busy={d.rejecting} busyText="Rejecting…">
+                                Reject
+                              </BusyLabel>
                             </Button>
                           </>
                         ) : (
                           <StatusPill status={quote.status} />
                         )}
 
-                        {/* Remove is deliberately quiet — it is housekeeping,
-                            not a decision. Withheld on the accepted quote,
-                            whose row carries the dealer's contact details. */}
-                        {canRemove(quote.status, rfqStatus) && (
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            className="h-7 w-7 text-slate-400 hover:text-destructive"
-                            onClick={() => handleRemove(quote.id)}
+                        {/* Withheld on the accepted quote, whose row carries
+                            the dealer's contact details. */}
+                        {d.removable && (
+                          <RemoveButton
+                            dealerName={quote.dealerName}
                             disabled={isPending}
-                            title="Remove from this comparison"
-                            aria-label={`Remove the quote from ${quote.dealerName}`}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                            onClick={() => handleRemove(quote.id)}
+                          />
                         )}
                       </div>
                     </td>
@@ -399,7 +589,7 @@ export function QuotesClient({
               <tfoot>
                 <tr className="border-t border-slate-300 bg-slate-50">
                   {/* colSpan tracks the 8 header cells: Dealer, Brand,
-                      Wire Grade | Total | vs Lowest, Delivery, Quoted | Action */}
+                      Wire Grade | Total | vs Lowest, Delivery, Valid Until | Action */}
                   <td className="spec-label px-3 py-2" colSpan={3}>
                     {live.length} live quotes
                   </td>
@@ -410,20 +600,16 @@ export function QuotesClient({
                     className="spec-num px-3 py-2 text-right text-slate-600"
                     colSpan={3}
                   >
-                    {spread !== null && spread > 0 && (
+                    {spread !== null && spread > 0 && lowest !== null && (
                       <>
                         spread {formatINR(spread)}
-                        {lowest ? (
-                          <span className="ml-1 text-slate-400">
-                            ({((spread / lowest) * 100).toFixed(0)}%)
-                          </span>
-                        ) : null}
+                        <span className="ml-1 text-slate-400">({pct(spread, lowest)})</span>
                       </>
                     )}
                   </td>
                   <td />
                 </tr>
-                {projectEstimate != null && lowest !== null && (
+                {estimateDelta !== null && projectEstimate != null && (
                   <tr className="border-t border-slate-200 bg-slate-50">
                     <td className="spec-label px-3 py-2" colSpan={3}>
                       vs your estimate
@@ -437,18 +623,12 @@ export function QuotesClient({
                     >
                       <span
                         className={
-                          lowest <= projectEstimate
-                            ? "text-emerald-700"
-                            : "text-amber-700"
+                          estimateDelta <= 0 ? "text-emerald-700" : "text-amber-700"
                         }
                       >
-                        {lowest <= projectEstimate ? "−" : "+"}
-                        {formatINR(Math.abs(lowest - projectEstimate))} (
-                        {(
-                          (Math.abs(lowest - projectEstimate) / projectEstimate) *
-                          100
-                        ).toFixed(0)}
-                        %)
+                        {estimateDelta <= 0 ? "−" : "+"}
+                        {formatINR(Math.abs(estimateDelta))} (
+                        {pct(Math.abs(estimateDelta), projectEstimate)})
                       </span>
                     </td>
                     <td />

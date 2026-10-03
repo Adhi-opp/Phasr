@@ -281,15 +281,16 @@ export function BoardScheduleView({
       </Section>
 
       {/* ── Disclaimer ───────────────────────────────────────────────────
-          Boxed and stark on purpose. Everything else on this page is a
-          procurement estimate; this is the only section that describes how
-          the electricity in someone's home is protected, and it must not be
-          mistaken for a signed-off design. */}
-      <div className="border-2 border-slate-900 bg-white px-3 py-2.5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-900">
-          Generated Board Schedule for Procurement
-        </p>
-        <p className="mt-1 text-[13px] leading-relaxed text-slate-700">
+          Kept as its own boxed note: everything else on this page is a
+          procurement estimate, and this is the only section describing how
+          the electricity in someone's home is protected, so it must not be
+          mistaken for a signed-off design. A 1px rule like the rest of the
+          sheet — the old 2px black frame cost a phone screen of space. */}
+      <div className="border border-slate-300 bg-white px-3 py-2">
+        <p className="text-xs leading-snug text-slate-600">
+          <span className="font-semibold text-slate-900">
+            Generated board schedule for procurement.
+          </span>{" "}
           Must be verified and load-balanced by a CEA-licensed electrical
           contractor prior to installation.
         </p>

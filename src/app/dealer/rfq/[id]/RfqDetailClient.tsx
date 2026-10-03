@@ -41,6 +41,7 @@ import {
 } from "@/components/spec-sheet";
 import { BoardScheduleView } from "@/features/calculator/components/BoardScheduleView";
 import type { DistributionSchedule } from "@/features/calculator/boardEngine";
+import { BusyLabel } from "@/components/busy-label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -584,8 +585,11 @@ export function RfqDetailClient({
                   className="h-9 w-full"
                   type="submit"
                   disabled={isPending || submitted}
+                  aria-busy={isPending}
                 >
-                  {isPending ? "Submitting…" : "Submit Bid"}
+                  <BusyLabel busy={isPending} busyText="Submitting…">
+                    Submit Bid
+                  </BusyLabel>
                 </Button>
               </form>
             ) : (
