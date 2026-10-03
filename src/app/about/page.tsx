@@ -30,16 +30,16 @@ const ENTER =
 
 export default function AboutPage() {
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] w-full bg-slate-50">
+    <main className="w-full bg-white">
       <div className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 md:py-24">
         <h1
-          className={`${ENTER} text-balance text-4xl font-bold leading-[1.05] tracking-tight text-slate-950 sm:text-5xl`}
+          className={`${ENTER} text-balance font-display text-5xl font-extrabold leading-[0.98] tracking-[-0.03em] text-ink sm:text-6xl`}
         >
           Smarter Electrical Planning for Delhi&nbsp;NCR.
         </h1>
 
         <p
-          className={`${ENTER} motion-safe:delay-150 mt-5 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-base sm:leading-7`}
+          className={`${ENTER} motion-safe:delay-150 mt-5 max-w-2xl text-[15px] leading-7 text-neutral-700 sm:text-base sm:leading-7`}
         >
           VoltFlow automatically calculates your property&apos;s exact wiring
           requirements, including load distribution, circuit schedules, and
@@ -47,8 +47,8 @@ export default function AboutPage() {
         </p>
 
         {/* The divider rides with the card so the two arrive together. */}
-        <div className={`${ENTER} motion-safe:delay-300 mt-10 border-t border-slate-200 pt-10`}>
-          <p className="border border-slate-200 bg-white px-5 py-5 text-[15px] leading-7 text-slate-900 sm:px-6 sm:text-base sm:leading-7">
+        <div className={`${ENTER} motion-safe:delay-300 mt-10 border-t border-neutral-300 pt-10`}>
+          <p className="border-2 border-ink bg-white px-5 py-5 text-[15px] font-medium leading-7 text-ink sm:px-6 sm:text-base sm:leading-7">
             Once your electrical plan is generated, the platform connects you
             directly with verified local distributors to source competitive
             wholesale quotes, ensuring you get the right materials at the best
@@ -57,7 +57,7 @@ export default function AboutPage() {
         </div>
 
         <div className={`${ENTER} motion-safe:delay-450 mt-10`}>
-          <Button asChild size="lg" className="w-full sm:w-auto">
+          <Button asChild size="lg" className="h-12 w-full text-[15px] font-semibold sm:w-auto">
             <Link href="/calculator">
               Start New Estimate
               <ArrowRight aria-hidden="true" />

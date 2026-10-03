@@ -131,7 +131,7 @@ export default function RegisterPage() {
         <CardFooter>
           <p className="text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link className="font-medium text-primary hover:underline" href={loginHref}>
+            <Link className="font-semibold text-foreground underline underline-offset-4" href={loginHref}>
               Sign in
             </Link>
           </p>

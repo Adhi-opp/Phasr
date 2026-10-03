@@ -9,7 +9,7 @@ export default function PrivacyPage() {
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-14 sm:px-6">
       <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Last updated: February 2026
+        Last updated: October 2026
       </p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-muted-foreground">
@@ -22,6 +22,10 @@ export default function PrivacyPage() {
             an account. For dealers, we additionally collect company name, GSTIN,
             address, service areas, and brands sold. Project data includes room
             dimensions, appliance loads, and the generated Bill of Materials.
+          </p>
+          <p className="mt-2">
+            Emails collected for feature waitlists are stored securely solely to
+            deliver launch notifications.
           </p>
         </section>
 

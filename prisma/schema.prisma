@@ -270,3 +270,13 @@ model PriceIndex {
   @@unique([wireType, brand])
   @@index([wireType])
 }
+
+// Emails left on /snap-to-bom to hear when it launches. Stored lowercased, so
+// the unique index also catches "Foo@x.com" after "foo@x.com". RLS is on with
+// no policies (see the migration): only the app, through Prisma, can read or
+// write it.
+model WaitlistSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}

@@ -122,14 +122,14 @@ export function PresetCards({ onSelect, onCustomize, activePresetId, disabled }:
             key={preset.id}
             className={cn(
               "flex cursor-pointer flex-col transition-all duration-150 hover:shadow-md",
-              isActive && "ring-2 ring-primary"
+              isActive && "ring-2 ring-ink"
             )}
             onClick={() => onSelect(preset.layout)}
           >
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
-                <div className="rounded-md bg-muted p-2">
-                  <preset.Icon className="h-5 w-5 text-primary" />
+                <div className="rounded-md bg-phase-yellow p-2">
+                  <preset.Icon className="h-5 w-5 text-ink" />
                 </div>
                 <Badge variant={preset.phase === "Three" ? "default" : "secondary"}>
                   {preset.phase} phase
