@@ -327,12 +327,33 @@ export function buildCalculatorInput(layout: LayoutInput): CalculatorInput {
   const rooms = generateRoomSpecsFromLayout(layout);
   const city = layout.city || "NCR";
 
-  return {
+  return buildCalculatorInputFromRooms(rooms, {
     projectName: `${layout.bedrooms}BHK ${layout.propertyType} - ${city}`,
-    propertyType: "RESIDENTIAL",
     city,
-    pincode: "",
     totalFloors: layout.totalFloors,
+  });
+}
+
+/**
+ * The same CalculatorInput around a RoomSpec[] that did not come from a
+ * LayoutInput — the floor-plan extractor's rooms (features/vision), which
+ * carry the drawing's real dimensions. Same defaults as above, supplyPhase
+ * "SINGLE" included, so the engine makes every phase decision.
+ */
+export function buildCalculatorInputFromRooms(
+  rooms: RoomSpec[],
+  {
+    projectName,
+    city,
+    totalFloors,
+  }: { projectName: string; city?: string; totalFloors?: number }
+): CalculatorInput {
+  return {
+    projectName,
+    propertyType: "RESIDENTIAL",
+    city: city || "NCR",
+    pincode: "",
+    totalFloors: totalFloors ?? Math.max(0, ...rooms.map((room) => room.floor)) + 1,
     rooms,
     supplyPhase: "SINGLE",
     dbLocation: "NEAR_ENTRANCE",

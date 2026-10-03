@@ -2,9 +2,11 @@
 // ============================================================================
 // COPPER PRICE SNAPSHOT INPUT
 // ============================================================================
-// Until an MCX feed exists, an admin types today's copper rate in by hand.
-// This is the validation for that one input, kept out of the "use server"
-// file so the admin form and the spec can import it too.
+// A daily cron records a COMEX parity rate (features/market/parity.ts); an
+// admin can still type a rate in by hand, to correct a bad day or record an
+// MCX figure. This is the validation for that one input, kept out of the
+// "use server" file so the admin form and the spec can import it too. The
+// cron's source, COMEX_PARITY, is deliberately not offered here.
 //
 // Rates are ₹ per kg. MCX copper traded around ₹1,400/kg through Sep 2026.
 // The ceiling is there to catch a unit slip: an LME reading is ~$14,600 per

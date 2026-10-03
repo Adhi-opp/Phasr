@@ -4,6 +4,8 @@ import { recordIdSchema, requireRole } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { priceSnapshotInputSchema } from "@/features/admin/priceSnapshot";
+import { updateTag } from "next/cache";
+import { COPPER_RATE_TAG } from "@/features/market/copperRate";
 import {
   sendDealerApprovedNotification,
   sendDealerRejectedNotification,
@@ -141,6 +143,10 @@ export async function createPriceSnapshotAction(
       source: parsed.data.source,
       adminId: authz.userId,
     });
+
+    // The navbar and /copper-rate read a cached copy; show the new rate now,
+    // not when the hour-long cache runs out.
+    updateTag(COPPER_RATE_TAG);
 
     return {
       success: true,

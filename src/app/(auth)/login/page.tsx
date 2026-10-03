@@ -99,7 +99,7 @@ export default function LoginPage() {
         <CardFooter>
           <p className="text-sm text-muted-foreground">
             New here?{" "}
-            <Link className="font-medium text-primary hover:underline" href={registerHref}>
+            <Link className="font-semibold text-foreground underline underline-offset-4" href={registerHref}>
               Create an account
             </Link>
           </p>

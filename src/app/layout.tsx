@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { auth } from "@/auth";
 import { AppSessionProvider } from "@/components/providers/session-provider";
 import { Navbar } from "@/components/Navbar";
 import { Toaster } from "@/components/ui/sonner";
+import { getLatestCopperRate } from "@/features/market/copperRate";
 import "./globals.css";
+
+/** Display face for headlines and the wordmark only; body copy stays Geist. */
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,15 +45,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
+  // The copper rate is cached and never throws: the menu shows it, but a
+  // database hiccup must not take every page down with it.
+  const [session, copperRate] = await Promise.all([auth(), getLatestCopperRate()]);
 
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${bricolage.variable} antialiased`}
       >
         <AppSessionProvider session={session}>
-          <Navbar />
+          <Navbar copperRate={copperRate} />
           {children}
           <Toaster richColors position="top-right" />
         </AppSessionProvider>

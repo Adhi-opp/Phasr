@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronRight, ScanLine } from "lucide-react";
 import { auth } from "@/auth";
+import { ComingSoonBadge, Eyebrow } from "@/components/phase";
 
 export const metadata: Metadata = {
   // absolute: the brand alone, bypassing the "%s | VoltFlow" template that
@@ -19,68 +20,89 @@ export const metadata: Metadata = {
 // ---------------------------------------------------------------------------
 // Landing page
 // ---------------------------------------------------------------------------
-// A headline, one plain-English sentence, and two doors — centred, nothing
-// else. What the product does lives on /about, linked from the navbar's ☰
-// menu; on this page it was a list a first-time visitor had to read past to
-// reach the buttons.
+// Phase R·Y·B. Top to bottom:
+//   1. Yellow hero — the headline and one plain-English sentence.
+//   2. Two doors — homeowners (ink, the primary path) and dealers.
+//   3. Snap-to-BOM teaser — the roadmap, marked Coming soon.
+//
+// The copper rate lives in the ☰ menu and on /copper-rate, not here: the
+// landing page has one job, getting a visitor into an estimate.
 //
 // The dealer path does not get a competing headline: there is one product
-// here, and a second hero would argue with the first. 1px rules, no fills.
+// here, and a second hero would argue with the first.
 // ---------------------------------------------------------------------------
 
-/** Small-caps eyebrow, matching the .spec-label treatment used on the data
-    screens without inheriting its colour. */
-function Eyebrow({
-  children,
-  className = "text-slate-500",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <p
-      className={`text-[11px] font-medium uppercase leading-none tracking-[0.18em] ${className}`}
-    >
-      {children}
-    </p>
-  );
-}
-
-/**
- * One door into the product.
- *
- * A bordered block rather than a card: no shadow, no fill, no radius beyond
- * the global 0.25rem. The hover state moves the border, not the box — a lift
- * on a landing page is decoration that a procurement tool does not need.
- */
+/** One door into the product. The primary door is ink; the other is outlined. */
 function EntryPane({
   href,
   audience,
   action,
   note,
+  primary = false,
 }: {
   href: string;
   audience: string;
   action: string;
   note: string;
+  primary?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className="group block border border-slate-200 bg-white px-5 py-4 transition-colors duration-150 ease-out hover:border-slate-400"
+      className={`group flex items-center justify-between gap-4 px-5 py-5 transition-colors duration-150 ${
+        primary
+          ? "bg-ink text-white hover:bg-neutral-800"
+          : "border-2 border-ink bg-white text-ink hover:bg-neutral-50"
+      }`}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <Eyebrow className="text-slate-400">{audience}</Eyebrow>
-          <p className="mt-2 text-[15px] font-semibold text-slate-900">
-            {action}
-          </p>
-          <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
-            {note}
-          </p>
-        </div>
-        <ArrowRight className="mt-0.5 size-4 shrink-0 text-slate-300 transition-[transform,color] duration-150 ease-out group-hover:translate-x-1 group-hover:text-slate-900" />
-      </div>
+      <span className="min-w-0">
+        <span
+          className={`block text-[10px] font-bold uppercase tracking-[0.18em] ${
+            primary ? "text-white/70" : "text-neutral-600"
+          }`}
+        >
+          {audience}
+        </span>
+        <span className="mt-1.5 block font-display text-[22px] font-extrabold leading-tight tracking-tight">
+          {action}
+        </span>
+        <span className={`mt-1 block text-[13px] leading-relaxed ${primary ? "text-white/70" : "text-neutral-600"}`}>
+          {note}
+        </span>
+      </span>
+      <ArrowRight
+        aria-hidden="true"
+        strokeWidth={2.4}
+        className={`size-5 shrink-0 transition-transform duration-150 ease-out group-hover:translate-x-1 ${
+          primary ? "text-phase-yellow" : "text-ink"
+        }`}
+      />
+    </Link>
+  );
+}
+
+function SnapTeaser() {
+  return (
+    <Link
+      href="/snap-to-bom"
+      className="group flex items-center gap-4 border border-neutral-300 bg-white px-4 py-3.5 transition-colors duration-150 hover:border-ink"
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center bg-phase-blue text-white">
+        <ScanLine aria-hidden="true" className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[15px] font-bold text-ink">Snap-to-BOM</span>
+          <ComingSoonBadge />
+        </span>
+        <span className="mt-0.5 block text-pretty text-[13px] text-neutral-600">
+          Snap a floor plan. The estimate fills itself in.
+        </span>
+      </span>
+      <ChevronRight
+        aria-hidden="true"
+        className="size-4 shrink-0 text-neutral-400 transition-[transform,color] duration-150 group-hover:translate-x-0.5 group-hover:text-ink"
+      />
     </Link>
   );
 }
@@ -91,33 +113,35 @@ export default async function Home() {
   const isBuyer = !!session?.user && !isDealer;
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] w-full bg-slate-50">
-      {/* landing-enter: headline, then the two doors 100ms behind, then the
-          sign-in line. Plain CSS, so it runs from first paint — no
-          JavaScript to wait for before the page is visible. */}
-      <div className="landing-enter mx-auto flex w-full max-w-2xl flex-col items-center px-4 py-16 text-center sm:px-6 md:py-28">
-        <div>
-          <h1 className="text-4xl font-bold leading-[1.05] tracking-tight text-slate-950 sm:text-5xl">
+    <main className="w-full bg-white">
+      <section className="bg-phase-yellow">
+        {/* landing-enter: eyebrow, headline, then the sentence, each a beat
+            behind. Plain CSS, so it runs from first paint. */}
+        <div className="landing-enter mx-auto w-full max-w-5xl px-4 pb-10 pt-12 sm:px-6 md:pb-16 md:pt-20">
+          <Eyebrow phase="red" tone="ink">
+            Delhi NCR · IS 732-aligned
+          </Eyebrow>
+          <h1 className="mt-4 font-display text-[3.75rem] font-extrabold leading-[0.92] tracking-[-0.04em] text-ink sm:text-7xl md:text-8xl">
             Plan the Build.
           </h1>
-          <p className="mx-auto mt-4 max-w-md text-[15px] leading-7 text-slate-600">
-            Find out exactly what wiring your home needs, then get prices from
-            verified dealers in Delhi NCR.
+          <p className="mt-5 max-w-md text-base leading-relaxed text-neutral-800 md:text-lg">
+            Find out exactly what wiring your home needs, then get prices from verified
+            dealers in Delhi NCR.
           </p>
         </div>
+      </section>
 
-        <div className="mt-10 grid w-full gap-3 text-left md:grid-cols-2">
+      <div className="landing-enter mx-auto w-full max-w-5xl px-4 pb-12 pt-5 sm:px-6 md:pt-8">
+        <div className="grid gap-3 md:grid-cols-2">
           <EntryPane
             href="/calculator"
+            primary
             audience="Homeowners & Builders"
             action={isBuyer ? "New Estimate" : "Calculate Your Estimate"}
             note={
-              isBuyer
-                ? "Start a fresh estimate for another property."
-                : "Free, and no account needed."
+              isBuyer ? "Start a fresh estimate for another property." : "Free, and no account needed."
             }
           />
-
           <EntryPane
             href={isDealer ? "/dealer/dashboard" : "/register?role=DEALER"}
             audience="Dealers & Distributors"
@@ -130,14 +154,15 @@ export default async function Home() {
           />
         </div>
 
-        <p className="mt-6 text-[13px] text-slate-500">
+        <div className="mt-3">
+          <SnapTeaser />
+        </div>
+
+        <p className="mt-6 text-[13px] text-neutral-600">
           {isBuyer ? (
             <>
               Your{" "}
-              <Link
-                href="/dashboard"
-                className="font-medium text-slate-900 underline-offset-4 hover:underline"
-              >
+              <Link href="/dashboard" className="font-semibold text-ink underline-offset-4 hover:underline">
                 saved projects
               </Link>{" "}
               are on the dashboard.
@@ -147,16 +172,13 @@ export default async function Home() {
           ) : (
             <>
               Already registered?{" "}
-              <Link
-                href="/login"
-                className="font-medium text-slate-900 underline-offset-4 hover:underline"
-              >
+              <Link href="/login" className="font-semibold text-ink underline-offset-4 hover:underline">
                 Sign in
               </Link>
               {" · "}
               <Link
                 href="/dashboard?demo=true"
-                className="font-medium text-slate-900 underline-offset-4 hover:underline"
+                className="font-semibold text-ink underline-offset-4 hover:underline"
               >
                 See a sample project
               </Link>
