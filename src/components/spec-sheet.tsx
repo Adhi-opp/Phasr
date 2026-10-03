@@ -38,8 +38,10 @@ export function Section({
 }) {
   return (
     <section className="border border-slate-200 bg-white">
-      <header className="flex items-baseline justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2">
-        <h3 className="flex items-baseline gap-2">
+      {/* flex-wrap + a no-wrap title: on a phone a long meta drops to its own
+          line instead of breaking the title ("MARKET / AUDIT") beside it. */}
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-slate-200 bg-slate-50 px-3 py-2">
+        <h3 className="flex items-baseline gap-2 whitespace-nowrap">
           {index != null && (
             <span className="spec-num text-[11px] text-slate-400">
               {String(index).padStart(2, "0")}
@@ -82,8 +84,25 @@ export function Metric({
 }
 
 /**
+ * Inline style for a `.spec-table`. Below 48rem the stylesheet turns each row
+ * into a stacked card — one line per column, its header printed beside the
+ * value — so a phone never scrolls sideways. The headers reach the stylesheet
+ * as CSS strings (--spec-col-1 … --spec-col-8); no row markup changes, which
+ * is what lets this work for rows rendered by a nested component, such as
+ * the board schedule's ways. The minimum width only applies at 48rem and up.
+ */
+export function specTableStyle(head: string[], minWidth: number): React.CSSProperties {
+  const style: Record<string, string> = { "--spec-min-w": `${minWidth}px` };
+  head.slice(0, 8).forEach((h, i) => {
+    style[`--spec-col-${i + 1}`] = JSON.stringify(h);
+  });
+  return style as React.CSSProperties;
+}
+
+/**
  * Dense table. First column left-aligned, the rest right-aligned, because
- * everything after the identifier is a quantity that should line up.
+ * everything after the identifier is a quantity that should line up. On a
+ * phone each row stacks into a card instead; see specTableStyle.
  */
 export function SpecTable({
   head,
@@ -97,8 +116,8 @@ export function SpecTable({
   return (
     <div className="overflow-x-auto">
       <table
-        className="w-full text-[13px]"
-        style={{ minWidth: `${minWidth}px` }}
+        className="spec-table w-full text-[13px]"
+        style={specTableStyle(head, minWidth)}
       >
         <thead>
           <tr className="border-b border-slate-200 bg-white">

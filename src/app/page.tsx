@@ -19,13 +19,13 @@ export const metadata: Metadata = {
 // ---------------------------------------------------------------------------
 // Landing page
 // ---------------------------------------------------------------------------
-// One surface, one background. The page states what the product does once,
-// then offers two doors into it — the dealer path does not get a competing
-// headline, because there is only one product here and a second hero was
-// arguing with the first.
+// A headline, one plain-English sentence, and two doors — centred, nothing
+// else. What the product produces (circuit schedule, coil rounding, demand)
+// lives in the About section of the navbar's ☰ menu; on the page it was a
+// list a first-time visitor had to read past to reach the buttons.
 //
-// Everything is separated by 1px rules rather than by colour blocks. The
-// borders carry the structure; nothing needs a filled panel to be legible.
+// The dealer path does not get a competing headline: there is one product
+// here, and a second hero would argue with the first. 1px rules, no fills.
 // ---------------------------------------------------------------------------
 
 /** Small-caps eyebrow, matching the .spec-label treatment used on the data
@@ -85,20 +85,6 @@ function EntryPane({
   );
 }
 
-/** Hairline list of what the product actually produces. Every line is backed
-    by a field the calculator already computes. */
-function SpecList({ items }: { items: string[] }) {
-  return (
-    <ul className="mt-8 border-t border-slate-200 text-[13px] text-slate-600">
-      {items.map((item) => (
-        <li key={item} className="border-b border-slate-200 py-2.5 leading-snug">
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export default async function Home() {
   const session = await auth();
   const isDealer = session?.user?.role === "DEALER";
@@ -106,95 +92,77 @@ export default async function Home() {
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] w-full bg-slate-50">
-      <div className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 md:py-24">
-        {/* landing-enter: the two columns fade up, hero 100ms behind the
-            panes. Plain CSS, so it runs from first paint — no JavaScript to
-            wait for before the page is visible. */}
-        <div className="landing-enter grid grid-cols-1 gap-10 md:grid-cols-2 md:items-start md:gap-14">
-          {/* ── Left: the two doors ──────────────────────────────────────
-              order-last on mobile so a first-time visitor reads what this
-              is before being asked to choose a path. On desktop the grid
-              puts it back in column one. */}
-          <div className="order-last flex flex-col gap-3 md:order-none">
-            <EntryPane
-              href="/calculator"
-              audience="Homeowners & Builders"
-              action={isBuyer ? "New Estimate" : "Calculate Your Estimate"}
-              note={
-                isBuyer
-                  ? "Start a fresh BOM for another property."
-                  : "Free, and no account needed."
-              }
-            />
-
-            <EntryPane
-              href={isDealer ? "/dealer/dashboard" : "/register?role=DEALER"}
-              audience="Dealers & Distributors"
-              action="Dealer Portal"
-              note={
-                isDealer
-                  ? "Open requests in your service area."
-                  : "Quote verified requirements in your service area."
-              }
-            />
-
-            <p className="mt-2 text-[13px] text-slate-500">
-              {isBuyer ? (
-                <>
-                  Your{" "}
-                  <Link
-                    href="/dashboard"
-                    className="font-medium text-slate-900 underline-offset-4 hover:underline"
-                  >
-                    saved projects
-                  </Link>{" "}
-                  are on the dashboard.
-                </>
-              ) : session?.user ? (
-                <>Signed in as a dealer.</>
-              ) : (
-                <>
-                  Already registered?{" "}
-                  <Link
-                    href="/login"
-                    className="font-medium text-slate-900 underline-offset-4 hover:underline"
-                  >
-                    Sign in
-                  </Link>
-                  {" · "}
-                  <Link
-                    href="/dashboard?demo=true"
-                    className="font-medium text-slate-900 underline-offset-4 hover:underline"
-                  >
-                    See a sample project
-                  </Link>
-                </>
-              )}
-            </p>
-          </div>
-
-          {/* ── Right: what this is ─────────────────────────────────────── */}
-          <div className="order-first md:order-none">
-            <Eyebrow>Residential electrical estimation &middot; Delhi NCR</Eyebrow>
-
-            <h1 className="mt-5 text-4xl font-bold leading-[1.05] tracking-tight text-slate-950 sm:text-5xl">
-              Plan the Build.
-            </h1>
-
-            <p className="mt-4 max-w-md text-[15px] leading-7 text-slate-600">
-              Generate an engineer-grade electrical BOM and source wholesale
-              quotes.
-            </p>
-
-            <SpecList
-              items={[
-                "Circuit schedule with MCB ratings and phase recommendation",
-                "Cable lengths rounded to purchasable coils, by gauge",
-                "Connected load and diversified maximum demand",
-              ]}
-            />
-          </div>
+      {/* landing-enter: headline, then the two doors 100ms behind, then the
+          sign-in line. Plain CSS, so it runs from first paint — no
+          JavaScript to wait for before the page is visible. */}
+      <div className="landing-enter mx-auto flex w-full max-w-2xl flex-col items-center px-4 py-16 text-center sm:px-6 md:py-28">
+        <div>
+          <h1 className="text-4xl font-bold leading-[1.05] tracking-tight text-slate-950 sm:text-5xl">
+            Plan the Build.
+          </h1>
+          <p className="mx-auto mt-4 max-w-md text-[15px] leading-7 text-slate-600">
+            Find out exactly what wiring your home needs, then get prices from
+            verified dealers in Delhi NCR.
+          </p>
         </div>
+
+        <div className="mt-10 grid w-full gap-3 text-left md:grid-cols-2">
+          <EntryPane
+            href="/calculator"
+            audience="Homeowners & Builders"
+            action={isBuyer ? "New Estimate" : "Calculate Your Estimate"}
+            note={
+              isBuyer
+                ? "Start a fresh estimate for another property."
+                : "Free, and no account needed."
+            }
+          />
+
+          <EntryPane
+            href={isDealer ? "/dealer/dashboard" : "/register?role=DEALER"}
+            audience="Dealers & Distributors"
+            action="Dealer Portal"
+            note={
+              isDealer
+                ? "Open requests in your service area."
+                : "Quote verified requirements in your service area."
+            }
+          />
+        </div>
+
+        <p className="mt-6 text-[13px] text-slate-500">
+          {isBuyer ? (
+            <>
+              Your{" "}
+              <Link
+                href="/dashboard"
+                className="font-medium text-slate-900 underline-offset-4 hover:underline"
+              >
+                saved projects
+              </Link>{" "}
+              are on the dashboard.
+            </>
+          ) : session?.user ? (
+            <>Signed in as a dealer.</>
+          ) : (
+            <>
+              Already registered?{" "}
+              <Link
+                href="/login"
+                className="font-medium text-slate-900 underline-offset-4 hover:underline"
+              >
+                Sign in
+              </Link>
+              {" · "}
+              <Link
+                href="/dashboard?demo=true"
+                className="font-medium text-slate-900 underline-offset-4 hover:underline"
+              >
+                See a sample project
+              </Link>
+            </>
+          )}
+        </p>
       </div>
     </main>
   );

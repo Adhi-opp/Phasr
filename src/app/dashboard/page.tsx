@@ -10,6 +10,9 @@ import {
 } from "@/lib/demo-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { specTableStyle } from "@/components/spec-sheet";
+
+const PROJECT_HEAD = ["Project", "Connected", "Demand", "Trade Estimate", "Status", "Quotes"];
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -161,7 +164,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
            load, demand and value can be compared down a column. */
         <div className="border border-slate-200 bg-white">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-[13px]">
+            {/* spec-table: on a phone each project stacks into a card
+                rather than scrolling sideways. Headers must match PROJECT_HEAD. */}
+            <table
+              className="spec-table w-full text-[13px]"
+              style={specTableStyle(PROJECT_HEAD, 720)}
+            >
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="spec-label px-3 py-2 text-left font-medium">

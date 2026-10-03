@@ -32,6 +32,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BusyLabel } from "@/components/busy-label";
 import { CountUp } from "@/components/count-up";
 import { Metric, Row, Section, SpecTable } from "@/components/spec-sheet";
 import { buildDistributionSchedule } from "../boardEngine";
@@ -288,22 +289,28 @@ function ActionBar({
 
       {canSave && (
         <div className="flex flex-col gap-2 sm:flex-row">
+          {/* Both disabled while either save runs: a second click would
+              create a second project. */}
           <Button
             variant="outline"
             onClick={() => onSaveProject("DRAFT")}
             disabled={isSavingProject}
+            aria-busy={isSavingProject && activeSaveMode === "DRAFT"}
             className="flex-1 bg-white"
           >
-            {isSavingProject && activeSaveMode === "DRAFT" ? "Saving…" : "Save as Draft"}
+            <BusyLabel busy={isSavingProject && activeSaveMode === "DRAFT"} busyText="Saving…">
+              Save as Draft
+            </BusyLabel>
           </Button>
           <Button
             onClick={() => onSaveProject("OPEN")}
             disabled={isSavingProject}
+            aria-busy={isSavingProject && activeSaveMode === "OPEN"}
             className="flex-1"
           >
-            {isSavingProject && activeSaveMode === "OPEN"
-              ? "Publishing…"
-              : "Request Dealer Quotes"}
+            <BusyLabel busy={isSavingProject && activeSaveMode === "OPEN"} busyText="Publishing…">
+              Request Dealer Quotes
+            </BusyLabel>
           </Button>
         </div>
       )}
@@ -540,17 +547,19 @@ export function BOMResultView({
         </div>
       </Collapsible>
 
-      <footer className="space-y-1">
-        <p className="spec-num text-[11px] text-slate-400">
+      {/* Fine print: proportional type, no box. Monospace ran the same
+          sentence to five lines on a phone. */}
+      <footer className="space-y-0.5 pt-1 text-xs leading-snug text-slate-500">
+        {/* The constant, not result.disclaimer: a saved estimate carries the
+            wording it was generated with, and the page must show today's. */}
+        <p>{BOQ_DISCLAIMER}</p>
+        <p className="text-slate-400">
           Algorithm v{result.algorithmVersion} ·{" "}
           {new Date(result.generatedAt).toLocaleString("en-IN", {
             dateStyle: "medium",
             timeStyle: "short",
           })}
         </p>
-        {/* The constant, not result.disclaimer: a saved estimate carries the
-            wording it was generated with, and the page must show today's. */}
-        <p className="font-mono text-xs leading-relaxed text-slate-500">{BOQ_DISCLAIMER}</p>
       </footer>
     </div>
   );

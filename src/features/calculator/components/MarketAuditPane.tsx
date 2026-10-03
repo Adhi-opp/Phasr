@@ -67,19 +67,21 @@ function Figure({
   children: React.ReactNode;
   className?: string;
 }) {
+  // A row on phones (label left, figure right), a column cell from sm up.
+  // Three side-by-side cells at 360px squeezed the labels to "REFERENCE P…".
   return (
-    <div className={`min-w-0 px-3 py-2 ${className}`}>
-      <p className="spec-label truncate">{label}</p>
-      <p className="spec-num mt-0.5 text-sm font-semibold leading-tight sm:text-base">
-        {children}
-      </p>
+    <div
+      className={`flex min-w-0 items-baseline justify-between gap-3 px-3 py-2 sm:block ${className}`}
+    >
+      <p className="spec-label sm:truncate">{label}</p>
+      <p className="spec-num text-base font-semibold leading-tight sm:mt-0.5">{children}</p>
     </div>
   );
 }
 
 function TheMath({ totalMrp, reference }: { totalMrp: number; reference: number }) {
   return (
-    <div className="grid grid-cols-3 divide-x divide-slate-200">
+    <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
       <Figure label="MRP (est.)" className="text-slate-500">
         <CountUp value={totalMrp} format={formatINR} />
       </Figure>

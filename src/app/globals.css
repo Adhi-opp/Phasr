@@ -156,18 +156,14 @@
 .sheet-enter > :nth-child(n + 6) { animation-delay: 150ms; }
 
 /* Landing variant: slower and longer (400ms, 10px), because this is read
-   once on arrival rather than scanned repeatedly. Two children — the action
-   panes and the hero. The hero follows 100ms behind wherever it sits: second
-   on desktop, but first on mobile, where the grid reorders it to the top. */
+   once on arrival rather than scanned repeatedly. The headline lands first,
+   the two entry cards 100ms behind it, the sign-in line last. */
 .landing-enter > * {
   --enter-distance: 10px;
   animation: sheet-enter 400ms ease-out both;
 }
-.landing-enter > :first-child { animation-delay: 100ms; }
-@media (min-width: 48rem) {
-  .landing-enter > :first-child { animation-delay: 0ms; }
-  .landing-enter > :nth-child(2) { animation-delay: 100ms; }
-}
+.landing-enter > :nth-child(2) { animation-delay: 100ms; }
+.landing-enter > :nth-child(n + 3) { animation-delay: 150ms; }
 
 @media (prefers-reduced-motion: reduce) {
   .sheet-enter > *,
@@ -203,4 +199,73 @@
 .spec-rule {
   border-bottom: 1px solid var(--foreground);
   padding-bottom: 0.375rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Spec tables on phones
+   ---------------------------------------------------------------------------
+   A four-to-six column schedule cannot fit a phone without sideways
+   scrolling, and a swiped table hides exactly the columns people came for.
+   Below 48rem each row becomes a short card instead: one line per column,
+   the column's name on the left, its value on the right.
+
+   The names arrive as --spec-col-N strings from specTableStyle() in
+   spec-sheet.tsx, so no table body needs touching. Unlayered on purpose:
+   these must beat the padding and alignment utilities on the cells, and
+   unlayered CSS outranks Tailwind's utilities layer regardless of
+   specificity.
+   --------------------------------------------------------------------------- */
+
+@media (min-width: 48rem) {
+  .spec-table {
+    min-width: var(--spec-min-w, 0);
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .spec-table thead {
+    display: none;
+  }
+  .spec-table tbody,
+  .spec-table tr {
+    display: block;
+  }
+  .spec-table tr {
+    padding: 0.5rem 0.75rem;
+  }
+  /* flow-root rather than flex: a cell may hold several block-level lines
+     (room, then circuit description); those stack under each other at the
+     right while the floated label holds the left edge. */
+  .spec-table td {
+    display: flow-root;
+    padding: 0.125rem 0;
+    line-height: 1.25rem;
+    text-align: right;
+  }
+  .spec-table td::before {
+    float: left;
+    margin-right: 1rem;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  /* The first column identifies the row (gauge, way, room, project), so it
+     reads as the card's heading. */
+  .spec-table td:first-child {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .spec-table td:nth-child(1)::before { content: var(--spec-col-1, ""); }
+  .spec-table td:nth-child(2)::before { content: var(--spec-col-2, ""); }
+  .spec-table td:nth-child(3)::before { content: var(--spec-col-3, ""); }
+  .spec-table td:nth-child(4)::before { content: var(--spec-col-4, ""); }
+  .spec-table td:nth-child(5)::before { content: var(--spec-col-5, ""); }
+  .spec-table td:nth-child(6)::before { content: var(--spec-col-6, ""); }
+  .spec-table td:nth-child(7)::before { content: var(--spec-col-7, ""); }
+  .spec-table td:nth-child(8)::before { content: var(--spec-col-8, ""); }
 }
