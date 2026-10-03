@@ -20,9 +20,9 @@ export const metadata: Metadata = {
 // Landing page
 // ---------------------------------------------------------------------------
 // A headline, one plain-English sentence, and two doors — centred, nothing
-// else. What the product produces (circuit schedule, coil rounding, demand)
-// lives in the About section of the navbar's ☰ menu; on the page it was a
-// list a first-time visitor had to read past to reach the buttons.
+// else. What the product does lives on /about, linked from the navbar's ☰
+// menu; on this page it was a list a first-time visitor had to read past to
+// reach the buttons.
 //
 // The dealer path does not get a competing headline: there is one product
 // here, and a second hero would argue with the first. 1px rules, no fills.
