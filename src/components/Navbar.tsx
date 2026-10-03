@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowUpRight,
@@ -8,6 +9,7 @@ import {
   ChartLine,
   Info,
   LayoutDashboard,
+  Loader2,
   Menu,
   MessageCircle,
   ScanLine,
@@ -26,9 +28,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { NavigationProgress } from "@/components/navigation-progress";
 import { ComingSoonBadge, PhaseStripe, PhaseSwatch, type Phase } from "@/components/phase";
 import { formatReadingDay, formatRupees, type CopperReading } from "@/features/market/format";
 import { WHATSAPP_PARTNER_URL } from "@/lib/contact";
+import { useNavigationPhase } from "@/lib/navigation-progress";
 
 // ---------------------------------------------------------------------------
 // Navbar
@@ -41,12 +45,16 @@ import { WHATSAPP_PARTNER_URL } from "@/lib/contact";
 // show inline.
 //
 // copperRate comes from the root layout, cached; null hides the figure.
+//
+// While a page loads after a link is tapped, a yellow bar runs along the
+// bar's bottom edge and a spinner turns beside the wordmark
+// (components/navigation-progress.tsx), so nobody taps three times.
 // ---------------------------------------------------------------------------
 
 /** No display value here: each link adds inline-flex, or hidden sm:inline-flex.
     Both in one class list and inline-flex wins, showing phone-hidden links. */
 const BAR_LINK =
-  "h-8 items-center rounded-md px-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white";
+  "h-8 items-center rounded-md px-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white active:bg-white/20";
 
 function MenuLink({
   href,
@@ -64,7 +72,7 @@ function MenuLink({
   /** Right-hand detail: the copper figure, a badge, "WhatsApp ↗". */
   trailing?: React.ReactNode;
 }) {
-  const className = `flex min-h-11 items-center gap-3 px-3 py-1.5 text-[15px] text-ink transition-colors hover:bg-neutral-100 ${
+  const className = `flex min-h-11 items-center gap-3 px-3 py-1.5 text-[15px] text-ink transition-colors hover:bg-neutral-100 active:bg-neutral-200 ${
     strong ? "font-semibold" : ""
   }`;
   const body = (
@@ -121,6 +129,7 @@ export function Navbar({ copperRate }: { copperRate: CopperReading | null }) {
   const role = session?.user?.role;
   const isAuthed = status === "authenticated";
   const isDealer = role === "DEALER";
+  const navigating = useNavigationPhase() === "loading";
 
   async function handleSignOut() {
     await signOut({ callbackUrl: "/login" });
@@ -281,6 +290,16 @@ export function Navbar({ copperRate }: { copperRate: CopperReading | null }) {
           <Link href="/" className="font-display text-xl font-extrabold tracking-tight text-white">
             voltflow
           </Link>
+          {/* Always mounted, so showing it never shifts the bar's layout. */}
+          <Loader2
+            aria-hidden="true"
+            className={`ml-1 size-4 text-phase-yellow transition-opacity duration-150 motion-safe:animate-spin ${
+              navigating ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          <span role="status" className="sr-only">
+            {navigating ? "Loading page" : ""}
+          </span>
         </div>
 
         <nav aria-label="Account" className="flex items-center gap-1">
@@ -319,6 +338,12 @@ export function Navbar({ copperRate }: { copperRate: CopperReading | null }) {
           )}
         </nav>
       </div>
+
+      {/* Suspense: it reads the query string, which a statically rendered
+          page would otherwise have to wait for. */}
+      <Suspense fallback={null}>
+        <NavigationProgress />
+      </Suspense>
     </header>
   );
 }

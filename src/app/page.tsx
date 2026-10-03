@@ -51,8 +51,8 @@ function EntryPane({
       href={href}
       className={`group flex items-center justify-between gap-4 px-5 py-5 transition-colors duration-150 ${
         primary
-          ? "bg-ink text-white hover:bg-neutral-800"
-          : "border-2 border-ink bg-white text-ink hover:bg-neutral-50"
+          ? "bg-ink text-white hover:bg-neutral-800 active:bg-neutral-700"
+          : "border-2 border-ink bg-white text-ink hover:bg-neutral-50 active:bg-neutral-100"
       }`}
     >
       <span className="min-w-0">
@@ -85,7 +85,7 @@ function SnapTeaser() {
   return (
     <Link
       href="/snap-to-bom"
-      className="group flex items-center gap-4 border border-neutral-300 bg-white px-4 py-3.5 transition-colors duration-150 hover:border-ink"
+      className="group flex items-center gap-4 border border-neutral-300 bg-white px-4 py-3.5 transition-colors duration-150 hover:border-ink active:bg-neutral-50"
     >
       <span className="flex size-10 shrink-0 items-center justify-center bg-phase-blue text-white">
         <ScanLine aria-hidden="true" className="size-5" />
