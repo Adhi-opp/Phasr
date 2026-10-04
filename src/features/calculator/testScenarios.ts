@@ -558,7 +558,7 @@ function printBOMSummary(name: string, input: CalculatorInput) {
 }
 
 // Run
-console.log("\n🔌 VoltFlow BOM Calculator — Test Scenarios\n");
+console.log("\n🔌 Phasr BOM Calculator — Test Scenarios\n");
 printBOMSummary("SCENARIO 1: Standard 2BHK (900 sq ft, Ghaziabad)", scenario2BHK);
 printBOMSummary("SCENARIO 2: Standard 3BHK (1200 sq ft, Noida)", scenario3BHK);
 printBOMSummary("SCENARIO 3: AC-Heavy 3BHK Duplex (1800 sq ft, Delhi)", scenario3BHKDuplex);

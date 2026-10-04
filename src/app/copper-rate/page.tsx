@@ -16,7 +16,7 @@ import {
 export const metadata: Metadata = {
   title: "Copper Rate",
   description:
-    "The copper reference rate VoltFlow records, in ₹ per kg, and why cable prices follow it.",
+    "The copper reference rate Phasr records, in ₹ per kg, and why cable prices follow it.",
 };
 
 // ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ function provenance(source: string): string {
     return "Derived from the global COMEX copper benchmark, converted at the latest USD/INR reference rate and adjusted for Indian market parity. A daily reference rate, not a live feed. 18% GST applies separately at final invoicing.";
   }
   const from = source === "MCX" || source === "LME" ? ` from the day's ${source} copper price` : "";
-  return `Entered by the VoltFlow team${from}. It is a reference rate, not a live feed.`;
+  return `Entered by the Phasr team${from}. It is a reference rate, not a live feed.`;
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {

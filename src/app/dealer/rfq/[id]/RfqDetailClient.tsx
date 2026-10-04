@@ -4,7 +4,7 @@
 // ============================================================================
 // MATERIAL REQUISITION
 // ============================================================================
-// This is the screen where a distributor decides whether VoltFlow is a real
+// This is the screen where a distributor decides whether Phasr is a real
 // tool or a toy, so it is laid out as an incoming requisition sheet rather
 // than a notification: a ruled header block carrying the reference and the
 // deadline, then three schedules in the order a job is actually priced —

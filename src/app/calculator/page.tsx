@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     "wire gauge calculator",
   ],
   openGraph: {
-    title: "Free Electrical Wiring Calculator — VoltFlow",
+    title: "Free Electrical Wiring Calculator — Phasr",
     description:
       "Bill of Materials aligned with IS 732 standard practice. Instant estimates for NCR homes.",
   },

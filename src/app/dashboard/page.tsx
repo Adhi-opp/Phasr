@@ -27,7 +27,7 @@ interface BomDataSnapshot {
   totalConnectedLoadKw: number;
   maxDemandKw: number;
   // materialCost, not totalEstimate: every estimate ever saved has it, and
-  // VoltFlow no longer prices labour, so it is the one comparable figure.
+  // Phasr no longer prices labour, so it is the one comparable figure.
   pricing: { materialCost: number };
 }
 

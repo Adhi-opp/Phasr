@@ -2,7 +2,7 @@
 // ============================================================================
 // DRAWING-SHEET PRIMITIVES
 // ============================================================================
-// The shared visual language for every data surface in VoltFlow: numbered
+// The shared visual language for every data surface in Phasr: numbered
 // sections with a ruled header, metric strips, and dense tables with tabular
 // figures. Density over decoration — 1px rules, tight padding, no shadows, no
 // pill radii.

@@ -78,7 +78,7 @@ export function formatBomForWhatsApp(result: BOMResult, appUrl?: string): string
   const supply = result.phaseDecision.finalRecommendation === "THREE" ? "3-Phase" : "1-Phase";
 
   return [
-    "*VoltFlow Material Spec*",
+    "*Phasr Material Spec*",
     `${supply} · ${result.totalConnectedLoadKw.toFixed(2)} kW connected · ${result.maxDemandKw.toFixed(2)} kW max demand`,
     "",
     ...block("Cable", cable),
@@ -86,7 +86,7 @@ export function formatBomForWhatsApp(result: BOMResult, appUrl?: string): string
     ...block("Conduit", conduit),
     ...block("Switches & Sockets", accessories),
     "Please quote for the above. Brand and wire grade (FR / FRLS / ZHFR) to be stated.",
-    ...(appUrl ? [`— via VoltFlow ${appUrl.replace(/\/$/, "")}`] : []),
+    ...(appUrl ? [`— via Phasr ${appUrl.replace(/\/$/, "")}`] : []),
   ].join("\n");
 }
 

@@ -10,7 +10,7 @@
 // build time, so changing the number on Vercel needs a redeploy.
 // ============================================================================
 
-const PARTNER_MESSAGE = "Hi VoltFlow, I'd like to partner with you.";
+const PARTNER_MESSAGE = "Hi Phasr, I'd like to partner with you.";
 
 /**
  * wa.me wants the full international number, digits only. A bare 10-digit

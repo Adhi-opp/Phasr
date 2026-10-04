@@ -18,7 +18,7 @@
 //   3. Conduit & distribution — what it runs through and terminates in
 //   4. Board schedule         — which breaker protects what
 //
-// Materials only throughout. VoltFlow does not price labour.
+// Materials only throughout. Phasr does not price labour.
 //
 // Circuit schedule and per-room load sit below, collapsed by default.
 // ============================================================================

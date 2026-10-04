@@ -9,7 +9,7 @@ export default function TermsPage() {
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-14 sm:px-6">
       <h1 className="text-3xl font-bold tracking-tight">Terms of Service</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Last updated: February 2026
+        Last updated: October 2026
       </p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-muted-foreground">
@@ -18,7 +18,7 @@ export default function TermsPage() {
             Platform Description
           </h2>
           <p>
-            VoltFlow is a two-sided marketplace connecting homeowners and
+            Phasr is a two-sided marketplace connecting homeowners and
             contractors with electrical material dealers. The platform provides an
             Bill of Materials calculator aligned with IS 732 standard practice, and
             a Request for Quotation engine. Outputs are informational estimates, not
@@ -35,7 +35,7 @@ export default function TermsPage() {
             and intended for reference and dealer quoting purposes only. Actual
             material requirements may vary by &plusmn;10-15% depending on site
             conditions. Final specifications must be verified by a licensed
-            electrical professional prior to procurement and installation. VoltFlow
+            electrical professional prior to procurement and installation. Phasr
             accepts no liability for estimates used without professional
             verification.
           </p>
@@ -47,7 +47,7 @@ export default function TermsPage() {
           </h2>
           <ul className="ml-4 list-disc space-y-1">
             <li>
-              VoltFlow facilitates connections between buyers and sellers but is
+              Phasr facilitates connections between buyers and sellers but is
               not a party to any transaction.
             </li>
             <li>
@@ -89,24 +89,11 @@ export default function TermsPage() {
             Limitation of Liability
           </h2>
           <p>
-            VoltFlow provides the platform &ldquo;as is&rdquo; without warranties
+            Phasr provides the platform &ldquo;as is&rdquo; without warranties
             of any kind. We are not liable for any damages arising from the use of
             our calculator estimates, marketplace transactions, or dealer
-            interactions. Maximum liability is limited to the fees paid to VoltFlow
+            interactions. Maximum liability is limited to the fees paid to Phasr
             in the preceding 12 months.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="mb-2 text-lg font-semibold text-foreground">
-            Contact
-          </h2>
-          <p>
-            For questions about these terms, email{" "}
-            <span className="font-medium text-foreground">
-              legal@voltflow.in
-            </span>
-            .
           </p>
         </section>
       </div>
