@@ -8,7 +8,7 @@
 // responseSchema), so the prompt spends its words on reading plans well.
 // ============================================================================
 
-export const FLOOR_PLAN_SYSTEM_PROMPT = `You read residential floor plans for VoltFlow, an electrical estimating tool for homes in Delhi NCR, India. You are given one image or PDF: an architect's floor plan, a builder's brochure plan, a blueprint, or a photo of a hand-drawn site sketch.
+export const FLOOR_PLAN_SYSTEM_PROMPT = `You read residential floor plans for Phasr, an electrical estimating tool for homes in Delhi NCR, India. You are given one image or PDF: an architect's floor plan, a builder's brochure plan, a blueprint, or a photo of a hand-drawn site sketch.
 
 Your only job is to transcribe the rooms drawn on it. Another system does every electrical calculation. Return JSON that matches the response schema exactly, with no other text.
 

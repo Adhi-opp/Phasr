@@ -4,9 +4,11 @@
 // ============================================================================
 // Hands a validated extraction to the existing deterministic engine. Two
 // outputs, for two stages of the product:
-//   rooms   RoomSpec[] carrying the plan's real dimensions. Through
-//           buildCalculatorInputFromRooms() into calculateBOM(), cable lengths
-//           then follow the actual house, not a template.
+//   rooms   RoomSpec[] for the rooms actually drawn, with their dimensions,
+//           for buildCalculatorInputFromRooms() and calculateBOM(). The
+//           engine sizes cable per point, not per square foot, so what the
+//           plan changes is the room list: how many rooms, of which type,
+//           with which appliances. Sizes feed the area cross-check below.
 //   layout  The same house as a LayoutInput (counts and toggles). The
 //           calculator form already accepts one: it is what a preset's
 //           Customise button prefills. That is the handoff today's UI can

@@ -2,7 +2,7 @@
 // ============================================================================
 // COST ENGINE — materials only
 // ============================================================================
-// VoltFlow prices what gets bought, never who installs it. Labour is a
+// Phasr prices what gets bought, never who installs it. Labour is a
 // negotiation over one person's day rate; a material price is checkable
 // against a dealer's list, and that is the only claim this engine makes.
 // ============================================================================

@@ -5,8 +5,8 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-const FROM = process.env.EMAIL_FROM || "VoltFlow <noreply@voltflow.in>";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://voltflow.in";
+const FROM = process.env.EMAIL_FROM || "Phasr <noreply@phasr.in>";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://phasr.in";
 
 function esc(str: string): string {
   return str
@@ -47,7 +47,7 @@ export async function sendNewRfqNotification(
     `<p>Hi ${esc(data.dealerName)},</p>
      <p>A new project "<strong>${esc(data.projectName)}</strong>" (est. value ${formatINR(data.estimateValue)}) is open for quotes in ${esc(data.rfqCity)}.</p>
      <p><a href="${APP_URL}/dealer/dashboard">View &amp; Submit Quote</a></p>
-     <p>- VoltFlow</p>`
+     <p>- Phasr</p>`
   );
 }
 
@@ -66,7 +66,7 @@ export async function sendQuoteReceivedNotification(
     `<p>Hi ${esc(data.homeownerName)},</p>
      <p><strong>${esc(data.dealerCompany)}</strong> submitted a quote of ${formatINR(data.quotePrice)} for your project "${esc(data.projectName)}".</p>
      <p><a href="${APP_URL}/dashboard">View Quotes</a></p>
-     <p>- VoltFlow</p>`
+     <p>- Phasr</p>`
   );
 }
 
@@ -94,7 +94,7 @@ export async function sendQuoteAcceptedNotification(
      <p>Email: ${esc(data.homeownerEmail)}</p>
      ${phoneLine}
      <p>Please reach out to the homeowner to finalize the order.</p>
-     <p>- VoltFlow</p>`
+     <p>- Phasr</p>`
   );
 }
 
@@ -108,7 +108,7 @@ export async function sendQuoteRejectedNotification(
     `<p>Hi ${esc(data.dealerName)},</p>
      <p>Your quote for "${esc(data.projectName)}" was not accepted this time.</p>
      <p><a href="${APP_URL}/dealer/dashboard">Browse more projects</a></p>
-     <p>- VoltFlow</p>`
+     <p>- Phasr</p>`
   );
 }
 
@@ -118,12 +118,12 @@ export async function sendDealerApprovedNotification(
 ) {
   await send(
     dealerEmail,
-    "Your VoltFlow dealer profile has been approved",
+    "Your Phasr dealer profile has been approved",
     `<p>Hi ${esc(data.dealerName)},</p>
      <p>Your dealer profile for <strong>${esc(data.companyName)}</strong> has been approved.</p>
      <p>You can now browse and quote on open projects in your service area.</p>
      <p><a href="${APP_URL}/dealer/dashboard">Go to Dealer Dashboard</a></p>
-     <p>- VoltFlow</p>`
+     <p>- Phasr</p>`
   );
 }
 
@@ -133,12 +133,12 @@ export async function sendDealerRejectedNotification(
 ) {
   await send(
     dealerEmail,
-    "VoltFlow dealer profile update",
+    "Phasr dealer profile update",
     `<p>Hi ${esc(data.dealerName)},</p>
      <p>Your dealer profile for <strong>${esc(data.companyName)}</strong> could not be approved at this time.</p>
      <p>Please ensure your GSTIN and dealership certificates are valid and try updating your profile.</p>
      <p><a href="${APP_URL}/dealer/profile/setup">Update Profile</a></p>
-     <p>- VoltFlow</p>`
+     <p>- Phasr</p>`
   );
 }
 
@@ -166,7 +166,7 @@ export async function sendAdminProjectSavedNotification(data: {
 
   await send(
     adminEmail,
-    `[VoltFlow Admin] ${actionLabel}: ${data.projectName} - ${data.city}`,
+    `[Phasr Admin] ${actionLabel}: ${data.projectName} - ${data.city}`,
     `<h2>${actionLabel}</h2>
      <p style="font-size:14px;">Use the saved project below for manual quote sourcing.</p>
      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; font-family:monospace; font-size:14px;">

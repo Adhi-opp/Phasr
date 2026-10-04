@@ -38,7 +38,7 @@ import { useNavigationPhase } from "@/lib/navigation-progress";
 // Navbar
 // ---------------------------------------------------------------------------
 // An ink bar under the R·Y·B stripe. ☰ at the top left opens a drawer of
-// links grouped as Market, Network and Roadmap, so the menu shows VoltFlow
+// links grouped as Market, Network and Roadmap, so the menu shows Phasr
 // is tied to real prices and real dealers, not only a calculator. On a phone
 // the bar itself keeps one link (Dashboard, or Sign In) so the hamburger,
 // the wordmark and that link fit at 360px. From sm up the main links also
@@ -165,7 +165,7 @@ export function Navbar({ copperRate }: { copperRate: CopperReading | null }) {
               <PhaseStripe />
               <SheetHeader className="flex-row items-center justify-between gap-2 border-b-2 border-ink py-2 pl-5 pr-2">
                 <SheetTitle className="font-display text-2xl font-extrabold tracking-tight text-ink">
-                  voltflow
+                  phasr
                 </SheetTitle>
                 <SheetClose asChild>
                   <Button variant="ghost" size="icon-lg" className="text-ink" aria-label="Close menu">
@@ -288,7 +288,7 @@ export function Navbar({ copperRate }: { copperRate: CopperReading | null }) {
           </Sheet>
 
           <Link href="/" className="font-display text-xl font-extrabold tracking-tight text-white">
-            voltflow
+            phasr
           </Link>
           {/* Always mounted, so showing it never shifts the bar's layout. */}
           <Loader2

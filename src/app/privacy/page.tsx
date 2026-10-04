@@ -73,19 +73,6 @@ export default function PrivacyPage() {
             request deletion of your account and associated data by contacting us.
           </p>
         </section>
-
-        <section>
-          <h2 className="mb-2 text-lg font-semibold text-foreground">
-            Contact Us
-          </h2>
-          <p>
-            For privacy-related concerns, email us at{" "}
-            <span className="font-medium text-foreground">
-              privacy@voltflow.in
-            </span>
-            .
-          </p>
-        </section>
       </div>
     </main>
   );

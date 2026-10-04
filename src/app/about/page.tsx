@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "VoltFlow calculates your property's exact wiring requirements in line with IS 732, then connects you with verified Delhi NCR distributors for competing wholesale quotes.",
+    "Phasr calculates your property's exact wiring requirements in line with IS 732, then connects you with verified Delhi NCR distributors for competing wholesale quotes.",
 };
 
 // ---------------------------------------------------------------------------
 // About page
 // ---------------------------------------------------------------------------
-// What VoltFlow does, moved out of the ☰ menu, where a paragraph turned the
+// What Phasr does, moved out of the ☰ menu, where a paragraph turned the
 // drawer into a wall of text on a phone. The same two ideas (plan the
 // wiring, then source it) are split into a headline, a lead, and the second
 // step set apart on a card.
@@ -41,7 +41,7 @@ export default function AboutPage() {
         <p
           className={`${ENTER} motion-safe:delay-150 mt-5 max-w-2xl text-[15px] leading-7 text-neutral-700 sm:text-base sm:leading-7`}
         >
-          VoltFlow automatically calculates your property&apos;s exact wiring
+          Phasr automatically calculates your property&apos;s exact wiring
           requirements, including load distribution, circuit schedules, and
           cable lengths aligned with IS&nbsp;732 standards.
         </p>

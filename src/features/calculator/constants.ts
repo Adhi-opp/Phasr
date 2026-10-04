@@ -562,7 +562,7 @@ export const ELECTRICAL_CONSTANTS = {
 // 15. BOQ DISCLAIMER
 //     One string for the engine's result and the results page footer, so a
 //     saved estimate shows the current wording rather than the one stored
-//     with it. VoltFlow cannot be the certifying party: installations must be
+//     with it. Phasr cannot be the certifying party: installations must be
 //     executed and certified by a licensed contractor under CEA regulations.
 // ---------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 // prisma/seed.ts
 // ============================================================================
-// VOLTFLOW SEED
+// PHASR SEED
 // ============================================================================
 // Enough of a world to click the whole product end to end without touching
 // the admin screens first:
@@ -112,7 +112,7 @@ async function main() {
     update: {},
     create: {
       email: "admin@voltflow.in",
-      name: "VoltFlow Admin",
+      name: "Phasr Admin",
       password: pw,
       role: "ADMIN",
     },
@@ -419,7 +419,7 @@ async function main() {
   // ── Summary ─────────────────────────────────────────────────────────────
 
   console.log(`
-VoltFlow seed complete.
+Phasr seed complete.
 
   Sign in with password123:
 

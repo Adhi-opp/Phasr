@@ -8,7 +8,7 @@ import { WHATSAPP_PARTNER_URL } from "@/lib/contact";
 export const metadata: Metadata = {
   title: "Verified Distributors",
   description:
-    "How VoltFlow verifies the electrical distributors who quote on it, across Delhi NCR.",
+    "How Phasr verifies the electrical distributors who quote on it, across Delhi NCR.",
 };
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ const STEPS = [
     body: "Every distributor registers their company name. A GSTIN, when given, must be a valid 15-character number.",
   },
   {
-    title: "VoltFlow review",
+    title: "Phasr review",
     body: "We check the profile before they can send a single quote.",
   },
   {
@@ -52,7 +52,7 @@ export default function DistributorsPage() {
             Now onboarding distributors across Delhi&nbsp;NCR.
           </h1>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-neutral-700">
-            Every dealer who quotes on VoltFlow is checked first.
+            Every dealer who quotes on Phasr is checked first.
           </p>
         </div>
 

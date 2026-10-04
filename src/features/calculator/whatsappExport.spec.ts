@@ -35,7 +35,7 @@ const result = applyPricing(
 const text = formatBomForWhatsApp(result);
 
 run("chit has a bold section for every category the BOM contains", () => {
-  for (const head of ["*VoltFlow Material Spec*", "*Cable*", "*Protection*", "*Conduit*", "*Switches & Sockets*"]) {
+  for (const head of ["*Phasr Material Spec*", "*Cable*", "*Protection*", "*Conduit*", "*Switches & Sockets*"]) {
     assert.ok(text.includes(head), `missing ${head}`);
   }
 });
@@ -61,9 +61,9 @@ run("carries no prices, so it cannot anchor a dealer's bid", () => {
 });
 
 run("footer link appears only when an app URL is given, without a trailing slash", () => {
-  assert.ok(!text.includes("via VoltFlow"));
-  const withUrl = formatBomForWhatsApp(result, "https://voltflow.in/");
-  assert.ok(withUrl.endsWith("— via VoltFlow https://voltflow.in"));
+  assert.ok(!text.includes("via Phasr"));
+  const withUrl = formatBomForWhatsApp(result, "https://phasr.in/");
+  assert.ok(withUrl.endsWith("— via Phasr https://phasr.in"));
 });
 
 run("share URL is a wa.me link whose text round-trips exactly", () => {

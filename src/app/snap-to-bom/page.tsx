@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import { auth } from "@/auth";
 import { ComingSoonBadge, Eyebrow } from "@/components/phase";
 import { NotifyForm } from "./NotifyForm";
+import { PlanReaderPreview } from "./PlanReaderPreview";
 
 export const metadata: Metadata = {
   title: "Snap-to-BOM",
   description:
-    "Coming soon: upload a floor plan and VoltFlow builds the wiring estimate for you.",
+    "Coming soon: upload a floor plan and Phasr builds the wiring estimate for you.",
 };
 
 // ---------------------------------------------------------------------------
@@ -19,7 +21,7 @@ export const metadata: Metadata = {
 
 const STEPS = [
   { title: "Upload", body: "Upload a floor plan, blueprint, or site sketch photo." },
-  { title: "Extract", body: "VoltFlow detects room boundaries, doors, and heavy appliance zones." },
+  { title: "Extract", body: "Phasr detects room boundaries, doors, and heavy appliance zones." },
   {
     title: "Estimate",
     body: "The IS 732-aligned engine computes cable lengths and circuit breakers.",
@@ -71,7 +73,12 @@ function ScanIllustration() {
   );
 }
 
-export default function SnapToBomPage() {
+export default async function SnapToBomPage() {
+  // Admins get the working reader above the waitlist; everyone else sees
+  // the roadmap page only.
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
+
   return (
     <main className="w-full bg-white">
       <div className="landing-enter mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 md:py-16">
@@ -84,7 +91,7 @@ export default function SnapToBomPage() {
             Snap a floor plan. The estimate fills itself in.
           </h1>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-neutral-700">
-            Upload your plan. VoltFlow reads the rooms off it and hands them to the same engine
+            Upload your plan. Phasr reads the rooms off it and hands them to the same engine
             that powers the calculator today.
           </p>
         </div>
@@ -111,6 +118,12 @@ export default function SnapToBomPage() {
         <p className="mt-3 text-[13px] text-neutral-600">
           A licensed electrician still checks the final design.
         </p>
+
+        {isAdmin && (
+          <div className="mt-10">
+            <PlanReaderPreview />
+          </div>
+        )}
 
         <div className="mt-10">
           <NotifyForm />

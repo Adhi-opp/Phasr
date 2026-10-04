@@ -21,7 +21,7 @@ import "server-only";
 import { z } from "zod";
 
 const TIMEOUT_MS = 8_000;
-const USER_AGENT = "VoltFlow/1.0 (+https://volt-flow-nine.vercel.app)";
+const USER_AGENT = "Phasr/1.0 (+https://volt-flow-nine.vercel.app)";
 
 /** An ECB rate older than this means Frankfurter is serving stale data. */
 const MAX_FX_AGE_DAYS = 5;

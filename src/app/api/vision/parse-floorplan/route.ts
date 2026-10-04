@@ -15,7 +15,9 @@
 // model quota, and nothing here is ready for the public.
 //
 // The 4 MB cap sits under Vercel's 4.5 MB request-body limit for functions.
-// Larger drawings will need direct-to-storage uploads first.
+// The browser shrinks photos before sending them (features/vision/
+// prepareUpload.ts), which also strips their EXIF location data; this check
+// is for any other caller. Larger PDFs will need direct-to-storage uploads.
 // ============================================================================
 
 import { requireRole } from "@/lib/authz";
@@ -25,11 +27,10 @@ import { buildCalculatorInputFromRooms } from "@/features/calculator/generateRoo
 import { floorPlanExtractionSchema } from "@/features/vision/floorPlan";
 import { extractWithGemini, geminiConfig, GeminiError } from "@/features/vision/gemini";
 import { floorPlanToCalculator } from "@/features/vision/toCalculator";
+import { MAX_UPLOAD_BYTES } from "@/features/vision/uploadLimits";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 function ascii(bytes: Uint8Array, from: number, to: number): string {
   return String.fromCharCode(...bytes.subarray(from, to));
