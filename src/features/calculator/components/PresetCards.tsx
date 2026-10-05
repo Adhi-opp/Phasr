@@ -15,87 +15,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { LayoutInput } from "../layoutTypes";
+import { PRESETS, type Preset } from "../presets";
 
 // ---------------------------------------------------------------------------
-// Preset definitions — mirroring validated layout scenarios
-// Do NOT import from layoutTestScenarios.ts (it has module-level side effects)
+// Presets: data in ../presets.ts (checked against the engine by its spec);
+// only the icons live here.
 // ---------------------------------------------------------------------------
 
-interface Preset {
-  id: string;
-  label: string;
-  subtitle: string;
-  specs: string[];
-  phase: "Single" | "Three";
-  Icon: React.ElementType;
-  layout: LayoutInput;
-}
-
-const PRESETS: Preset[] = [
-  {
-    id: "2BHK",
-    label: "2 BHK Flat",
-    subtitle: "Standard NCR flat",
-    specs: ["2 bed · 2 bath · 1 balcony", "~900 sq ft"],
-    phase: "Single",
-    Icon: Home,
-    layout: {
-      propertyType: "FLAT",
-      city: "NCR",
-      bedrooms: 2,
-      bathrooms: 2,
-      balconies: 1,
-      totalFloors: 1,
-      approxSqFt: 900,
-      modularKitchen: false,
-      acInBedrooms: true,
-      acInLivingRoom: true,
-      geyserInBathrooms: true,
-    },
-  },
-  {
-    id: "3BHK",
-    label: "3 BHK Flat",
-    subtitle: "Mid-range NCR flat",
-    specs: ["3 bed · 2 bath · 2 balconies", "~1200 sq ft · Modular kitchen"],
-    phase: "Single",
-    Icon: Building2,
-    layout: {
-      propertyType: "FLAT",
-      city: "NCR",
-      bedrooms: 3,
-      bathrooms: 2,
-      balconies: 2,
-      totalFloors: 1,
-      approxSqFt: 1200,
-      modularKitchen: true,
-      acInBedrooms: true,
-      acInLivingRoom: true,
-      geyserInBathrooms: true,
-    },
-  },
-  {
-    id: "DUPLEX",
-    label: "3 BHK Duplex",
-    subtitle: "Independent duplex",
-    specs: ["3 bed · 3 bath · 2 floors", "~1800 sq ft · Modular kitchen"],
-    phase: "Three",
-    Icon: Layers,
-    layout: {
-      propertyType: "DUPLEX",
-      city: "NCR",
-      bedrooms: 3,
-      bathrooms: 3,
-      balconies: 1,
-      totalFloors: 2,
-      approxSqFt: 1800,
-      modularKitchen: true,
-      acInBedrooms: true,
-      acInLivingRoom: true,
-      geyserInBathrooms: true,
-    },
-  },
-];
+const ICONS: Record<Preset["id"], React.ElementType> = {
+  "2BHK": Home,
+  "3BHK": Building2,
+  DUPLEX: Layers,
+};
 
 // ---------------------------------------------------------------------------
 // Props
@@ -117,6 +48,7 @@ export function PresetCards({ onSelect, onCustomize, activePresetId, disabled }:
     <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-3", disabled && "pointer-events-none opacity-60")}>
       {PRESETS.map((preset) => {
         const isActive = activePresetId === preset.id;
+        const Icon = ICONS[preset.id];
         return (
           <Card
             key={preset.id}
@@ -129,7 +61,7 @@ export function PresetCards({ onSelect, onCustomize, activePresetId, disabled }:
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
                 <div className="rounded-md bg-phase-yellow p-2">
-                  <preset.Icon className="h-5 w-5 text-ink" />
+                  <Icon className="h-5 w-5 text-ink" />
                 </div>
                 <Badge variant={preset.phase === "Three" ? "default" : "secondary"}>
                   {preset.phase} phase

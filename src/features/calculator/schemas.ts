@@ -8,6 +8,14 @@
 
 import { z } from "zod";
 
+// Zod compiles object parsers with `new Function` when it can, and finds out
+// by trying it once. Under the site's Content-Security-Policy (no
+// 'unsafe-eval'; see src/middleware.ts) that probe is blocked and logged as a
+// violation. Jitless mode skips both; the speed difference is immaterial for
+// one small form. It must run before the first z.object() below: this is the
+// only object schema the browser builds.
+z.config({ jitless: true });
+
 export const layoutSchema = z
   .object({
     propertyType: z.enum(["FLAT", "BUILDER_FLOOR", "DUPLEX"]),

@@ -2,6 +2,7 @@
 
 import { Prisma, QuoteRequestStatus } from "@prisma/client";
 import { z } from "zod";
+import { isNcrCityKey } from "@/features/calculator/regulatoryPolicy";
 import { runEstimate } from "@/features/calculator/runEstimate";
 import { WIRE_GRADES } from "@/features/quotes/wireGrade";
 import {
@@ -135,9 +136,14 @@ function isRetryableSerializationError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Which dealers see the request. Every NCR city routes to "NCR": dealers
+ * serve the region, not one city, and the calculator's city choice exists to
+ * pick the state's three-phase rule, not to narrow the dealer pool.
+ */
 function deriveVisibilityCity(policyKey: string | undefined): string {
   const normalized = policyKey?.trim();
-  if (!normalized || normalized.toUpperCase() === "DEFAULT") {
+  if (!normalized || normalized.toUpperCase() === "DEFAULT" || isNcrCityKey(normalized)) {
     return "NCR";
   }
   return normalized;

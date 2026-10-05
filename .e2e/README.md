@@ -17,31 +17,19 @@ Exits non-zero on failure. It creates and deletes its own `e2e-*` projects and
 resets what it touches, but it **mutates the seeded database** — re-run
 `npx prisma db seed` afterwards before doing a manual pass.
 
-## The action IDs will go stale
+## Server action IDs
 
-`run.mjs` invokes server actions by the opaque ID Next.js assigns them. The
-IDs are derived from each action's file path and export name, not its body:
-a full rewrite of `features/quotes/actions.ts` (Sep 2026) left every ID
-unchanged. **Renaming or moving an action changes its ID**, and the harness
-then decodes `null` instead of a result.
+`run.mjs` invokes server actions by the opaque ID Next.js assigns them, and
+those IDs change from build to build. It no longer hard-codes them: it reads
+`.next/server/server-reference-manifest.json` from the build under test and
+looks each action up by its `exportedName`. So **build before you run it**;
+against a stale build, or after an action is renamed, it stops with a
+"No server action" error instead of failing every check with `null`.
 
-To refresh them:
-
-1. `cat .next/server/server-reference-manifest.json` — the `node` key maps each
-   ID to the page whose bundle contains it.
-2. Identify which is which by behaviour — the manifest carries IDs and page
-   paths but no function names. Call each candidate through `action()` in
-   `lib.mjs` against a throwaway fixture and read the error back:
-   - Against an **ACCEPTED** quote, `hideQuoteAction` returns the "holds the
-     dealer's contact details" error while accept and reject both return
-     "already processed" — that isolates hide.
-   - Against a **SUBMITTED** quote on a **CLOSED** RFQ, accept returns
-     "no longer open" while reject succeeds — that separates the remaining two.
-3. Update the `A` map at the top of `run.mjs`.
-
-This fragility is why the harness is deliberately **not** wired into
-`npm run test`. The specs in `src/features/**/*.spec.ts` are the suite that
-must always pass; this one is run by hand before a release.
+The harness is still deliberately **not** wired into `npm run test`: it needs
+a running server and mutates the database. The specs in
+`src/features/**/*.spec.ts` are the suite that must always pass; this one is
+run by hand before a release.
 
 ## What it does not cover
 

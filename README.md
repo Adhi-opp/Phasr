@@ -43,10 +43,20 @@ The curve follows the load. Type B trips at 3–5× its rating and protects resi
 
 | Supply | When | Incomer and RCCB |
 | --- | --- | --- |
-| Single phase | Default | 40 A double-pole RCCB, 30 mA |
-| Three phase | Peak demand above 7 kW, or connected load above 10 kW in Delhi NCR (7 kW elsewhere) | 63 A four-pole RCCB, 30 mA, with phase balancing |
+| Single phase | Default | 40 A double-pole main switch and RCCB (30 mA), 10 mm² feeder |
+| Three phase | Peak demand above 7 kW, or connected load over the state's single-phase limit (below) | 63 A four-pole main switch and RCCB (30 mA), 16 mm² feeder, phase balancing |
 
-The 10 kW line is the Delhi DISCOM rule. Under DERC's supply regulations, which BSES and the other Delhi DISCOMs apply, a low-tension connection is single phase up to 10 kW and three phase above it. The engine applies that threshold to every NCR city it recognises (Delhi, Noida, Greater Noida, Ghaziabad, Gurugram, Faridabad) and 7 kW anywhere else. When either test trips, the whole BOM switches to three-phase parts automatically: a TPN distribution board, a four-pole isolator and a 63 A four-pole RCCB.
+The connected-load limit is set by each state's electricity regulator, and NCR spans three states. Each rule below comes from the regulator's own text, cited in `regulatoryPolicy.ts`:
+
+| Area | Regulator | Single phase | Three phase |
+| --- | --- | --- | --- |
+| Delhi | DERC (BSES, Tata Power-DDL, NDMC) | Up to 10 kW | Above 10 kW |
+| Gurugram, Faridabad | HERC (DHBVN) | Up to 5 kW | Above 5 kW |
+| Noida, Greater Noida, Ghaziabad | UPERC | Below 5 kW | 5 kW or more |
+
+The calculator asks for the city and applies that state's rule. An estimate saved before the city question existed is treated as Delhi, and anywhere outside NCR falls back to 7 kW. When either test trips, the whole BOM switches to three-phase parts automatically: a TPN distribution board, a four-pole isolator and a 63 A four-pole RCCB.
+
+The parts list and the board schedule read the same main-switch rating, and the main feeder from the meter is sized to carry that breaker under the fire-guard table: 10 mm² for 40 A, 16 mm² for 63 A.
 
 Peak demand applies whole-house diversity to the connected load: 40% for lighting, 50% for 15 A sockets, 40% for ACs and geysers. If demand needs more than the standard fitment, the schedule steps the incomer and RCCB up to the next standard rating (80 A, then 100 A).
 
@@ -62,6 +72,17 @@ On a three-phase board, circuits are placed heaviest first onto whichever of the
 ## Snap-to-BOM (in development)
 
 A vision model reads the rooms, their sizes and any marked AC, geyser or cooking-range positions off a floor-plan photo or PDF. It does no electrical maths: the extraction goes through the same engine as the calculator. Before upload, the browser shrinks photos to 1920 px and re-encodes them as JPEG, which keeps them under the 4 MB upload limit and strips EXIF metadata, including GPS location. Admin-only while in development.
+
+## Demand analytics and the case study
+
+`/case-study` is a public write-up of the product, data architecture and engineering decisions. It includes a projected-demand chart: cable demand by gauge and pin code, from an illustrative month of estimates run through the real engine (`src/features/analytics/demandSample.ts`). Because a bill of materials exists before the cable is bought, saved estimates are a leading indicator of demand by gauge.
+
+## Security
+
+- Nonce-based Content-Security-Policy on every page (`src/middleware.ts`): no inline script runs unless the server rendered it for that request.
+- `X-Frame-Options: DENY`, `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` and `Permissions-Policy` on every response (`next.config.ts`).
+- Role checks at the edge and again in every protected page and server action; Postgres row-level security on every table.
+- Prices are always recomputed on the server; the browser only ever sends a layout.
 
 ## Tech Stack
 

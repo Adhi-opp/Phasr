@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { buildDistributionSchedule, MAX_BREAKER_FOR_GAUGE } from "./boardEngine";
 import { calculateBOM } from "./calculateBOM";
+import { CIRCUIT_TYPES } from "./constants";
 import type { CalculatorInput, RoomSpec } from "./type";
 
 function makeRoom(partial: Omit<RoomSpec, "id">, id = "room-1"): RoomSpec {
@@ -31,7 +33,7 @@ function run(name: string, fn: () => void): void {
 }
 
 run("NCR regulatory override promotes final phase to THREE when engineering is SINGLE", () => {
-  const input = makeInput("Noida", [
+  const input = makeInput("Delhi", [
     makeRoom({
       name: "Living Room",
       type: "LIVING_ROOM",
@@ -378,4 +380,168 @@ run("Circuit IDs are deterministic across multiple calls", () => {
   const ids1 = result1.circuits.map((c) => c.circuitId);
   const ids2 = result2.circuits.map((c) => c.circuitId);
   assert.deepEqual(ids1, ids2, "Circuit IDs should be identical across calls");
+});
+
+// ---------------------------------------------------------------------------
+// State three-phase rules (regulatoryPolicy.ts)
+// ---------------------------------------------------------------------------
+
+/** Only dedicated circuits, so connected load is exactly heavy × 1.5 kW + sockets × 0.5 kW. */
+function loadOnly(heavyAppliances: number, socket15A = 0): RoomSpec[] {
+  return [
+    makeRoom(
+      {
+        name: "Load",
+        type: "LIVING_ROOM",
+        floor: 0,
+        lengthFt: 16,
+        widthFt: 12,
+        lightPoints: 0,
+        fanPoints: 0,
+        socket5A: 0,
+        socket15A,
+        heavyAppliances,
+        exhaustFan: 0,
+      },
+      "load-room"
+    ),
+  ];
+}
+
+run("A 6 kW house is single phase in Delhi but three phase in Gurugram and Noida", () => {
+  const delhi = calculateBOM(makeInput("Delhi", loadOnly(4)));
+  const gurugram = calculateBOM(makeInput("Gurugram", loadOnly(4)));
+  const noida = calculateBOM(makeInput("Noida", loadOnly(4)));
+
+  assert.equal(delhi.totalConnectedLoadKw, 6);
+  assert.equal(delhi.phaseDecision.engineeringRecommendation, "SINGLE");
+  assert.equal(delhi.phaseDecision.regulatoryRecommendation, "SINGLE");
+  assert.equal(delhi.phaseDecision.supplyAuthority, "Delhi (DERC)");
+
+  assert.equal(gurugram.phaseDecision.regulatoryRecommendation, "THREE");
+  assert.equal(gurugram.phaseDecision.connectedLoadThresholdKw, 5);
+  assert.equal(gurugram.phaseDecision.supplyAuthority, "Haryana (HERC)");
+
+  assert.equal(noida.phaseDecision.regulatoryRecommendation, "THREE");
+  assert.equal(noida.phaseDecision.supplyAuthority, "Uttar Pradesh (UPERC)");
+});
+
+run("At exactly 5 kW, UP (5 kW or more) goes three phase and Haryana (above 5 kW) does not", () => {
+  const gurugram = calculateBOM(makeInput("Gurugram", loadOnly(2, 4)));
+  const noida = calculateBOM(makeInput("Noida", loadOnly(2, 4)));
+
+  assert.equal(gurugram.totalConnectedLoadKw, 5);
+  assert.equal(gurugram.phaseDecision.regulatoryRecommendation, "SINGLE");
+  assert.equal(noida.phaseDecision.regulatoryRecommendation, "THREE");
+  assert.equal(noida.phaseDecision.threePhaseAtThreshold, true);
+  assert.ok(noida.warnings.some((w) => w.includes("Uttar Pradesh (UPERC) supplies three phase from 5 kW")));
+});
+
+run("NCR without a city follows the Delhi rule", () => {
+  const ncr = calculateBOM(makeInput("NCR", loadOnly(4)));
+  assert.equal(ncr.phaseDecision.connectedLoadThresholdKw, 10);
+  assert.equal(ncr.phaseDecision.regulatoryRecommendation, "SINGLE");
+});
+
+// ---------------------------------------------------------------------------
+// The parts list and the board schedule agree
+// ---------------------------------------------------------------------------
+
+function mainParts(result: ReturnType<typeof calculateBOM>) {
+  const schedule = buildDistributionSchedule({
+    circuits: result.circuits,
+    supply: result.phaseDecision.finalRecommendation,
+    maxDemandKw: result.maxDemandKw,
+  });
+  const mainSwitch = result.items.find((i) => i.category === "MAIN_SWITCH");
+  const rccb = result.items.find((i) => i.category === "RCCB");
+  assert.ok(mainSwitch && mainSwitch.category === "MAIN_SWITCH");
+  assert.ok(rccb && rccb.category === "RCCB");
+  return { schedule, mainSwitch, rccb };
+}
+
+run("Single phase: the 40 A main switch matches the board incomer and the RCCB", () => {
+  const result = calculateBOM(makeInput("Delhi", loadOnly(2)));
+  assert.equal(result.recommendedPhase, "SINGLE");
+  const { schedule, mainSwitch, rccb } = mainParts(result);
+  assert.equal(mainSwitch.ratingAmps, 40);
+  assert.equal(mainSwitch.ratingAmps, schedule.incomer.ratingAmps);
+  assert.equal(rccb.ratingAmps, schedule.incomer.rccb.ratingAmps);
+  assert.equal(mainSwitch.pricingCode, "MAIN_SWITCH_40A_DP");
+});
+
+run("Three phase: the 63 A main switch matches the board incomer and the RCCB", () => {
+  const result = calculateBOM(makeInput("Gurugram", loadOnly(4)));
+  assert.equal(result.recommendedPhase, "THREE");
+  const { schedule, mainSwitch, rccb } = mainParts(result);
+  assert.equal(mainSwitch.ratingAmps, 63);
+  assert.equal(mainSwitch.ratingAmps, schedule.incomer.ratingAmps);
+  assert.equal(rccb.ratingAmps, schedule.incomer.rccb.ratingAmps);
+});
+
+run("The main feeder cable can carry its main breaker (fire-guard ceiling)", () => {
+  const single = calculateBOM(makeInput("Delhi", loadOnly(2)));
+  const three = calculateBOM(makeInput("Gurugram", loadOnly(4)));
+  const gauges = (r: ReturnType<typeof calculateBOM>) =>
+    r.items.filter((i) => i.category === "WIRE").map((i) => (i.category === "WIRE" ? i.wireGauge : ""));
+
+  // No room circuit uses 10 or 16 mm², so these come from the feeder alone.
+  assert.ok(gauges(single).includes("10.0"), "40 A single-phase main needs a 10 mm² feeder");
+  assert.ok(!gauges(single).includes("6.0"), "6 mm² is capped at 32 A, below the 40 A main");
+  assert.ok(MAX_BREAKER_FOR_GAUGE["10.0"] >= 40);
+  assert.ok(gauges(three).includes("16.0"), "63 A three-phase main needs a 16 mm² feeder");
+  assert.ok(MAX_BREAKER_FOR_GAUGE["16.0"] >= 63);
+});
+
+run("Lighting circuits are 10 A Type B, the shared constant", () => {
+  const result = calculateBOM(
+    makeInput("Delhi", [
+      makeRoom(
+        {
+          name: "Bedroom",
+          type: "BEDROOM",
+          floor: 0,
+          lengthFt: 12,
+          widthFt: 10,
+          lightPoints: 3,
+          fanPoints: 1,
+          socket5A: 4,
+          socket15A: 0,
+          heavyAppliances: 0,
+          exhaustFan: 0,
+        },
+        "lighting-room"
+      ),
+    ])
+  );
+  const lighting = result.circuits.filter((c) => c.circuitType === "LIGHTING");
+  assert.ok(lighting.length > 0);
+  assert.ok(lighting.every((c) => c.mcbRatingAmps === 10));
+  assert.equal(CIRCUIT_TYPES.LIGHTING.mcbRatingAmps, 10);
+  assert.equal(CIRCUIT_TYPES.LIGHTING.mcbType, "B");
+  assert.ok(result.items.some((i) => i.pricingCode === "MCB_10A_B"));
+});
+
+run("Room dimensions never change the bill: cable is sized per point", () => {
+  const room = (lengthFt: number, widthFt: number) =>
+    makeRoom(
+      {
+        name: "Bedroom",
+        type: "BEDROOM",
+        floor: 0,
+        lengthFt,
+        widthFt,
+        lightPoints: 3,
+        fanPoints: 1,
+        socket5A: 3,
+        socket15A: 1,
+        heavyAppliances: 1,
+        exhaustFan: 0,
+      },
+      "size-room"
+    );
+  const asRead = calculateBOM(makeInput("Delhi", [room(12, 10)]));
+  const misread = calculateBOM(makeInput("Delhi", [room(18, 15)]));
+  assert.deepEqual(misread.items, asRead.items);
+  assert.equal(misread.totalCircuits, asRead.totalCircuits);
 });

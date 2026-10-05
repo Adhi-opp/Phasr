@@ -107,10 +107,12 @@ export type PricingCode =
   | "MCB_16A_C"
   | "MCB_20A_C"
   | "MCB_32A_C"
+  | "MCB_40A_C"
   | "MCB_63A_C"
   | "RCCB_40A_2P_30MA"
   | "RCCB_63A_4P_30MA"
-  | "MAIN_SWITCH_32A_DP"
+  | "MAIN_SWITCH_32A_DP" // legacy: only in BOMs saved before the 40 A main (Oct 2026)
+  | "MAIN_SWITCH_40A_DP"
   | "MAIN_SWITCH_63A_FP"
   | "DB_GENERIC"
   | "SWITCH_MODULAR_6A_10A"
@@ -242,6 +244,10 @@ export interface BOMResult {
     finalRecommendation: "SINGLE" | "THREE";
     connectedLoadThresholdKw: number;
     regulatoryPolicyKey: string;
+    /** UP's rule is "5 kW or more", Delhi's and Haryana's "above". Absent on BOMs saved before Oct 2026. */
+    threePhaseAtThreshold?: boolean;
+    /** Whose rule it is, e.g. "Delhi (DERC)". Null for a rule with no known authority. */
+    supplyAuthority?: string | null;
     reasons: string[];
   };
   totalCircuits: number;

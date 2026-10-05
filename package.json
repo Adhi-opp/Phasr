@@ -8,7 +8,7 @@
     "build:local": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx src/features/calculator/calculateBOM.spec.ts && tsx src/features/calculator/costEngine.spec.ts && tsx src/features/calculator/boardEngine.spec.ts && tsx src/features/calculator/marketAudit.spec.ts && tsx src/features/calculator/whatsappExport.spec.ts && tsx src/features/quotes/validity.spec.ts && tsx src/features/admin/priceSnapshot.spec.ts && tsx src/features/market/parity.spec.ts && tsx src/features/waitlist/schema.spec.ts && tsx src/features/vision/toCalculator.spec.ts && tsx src/features/vision/uploadLimits.spec.ts",
+    "test": "tsx src/features/calculator/calculateBOM.spec.ts && tsx src/features/calculator/presets.spec.ts && tsx src/features/calculator/costEngine.spec.ts && tsx src/features/calculator/boardEngine.spec.ts && tsx src/features/calculator/marketAudit.spec.ts && tsx src/features/calculator/whatsappExport.spec.ts && tsx src/features/quotes/validity.spec.ts && tsx src/features/admin/priceSnapshot.spec.ts && tsx src/features/market/parity.spec.ts && tsx src/features/waitlist/schema.spec.ts && tsx src/features/vision/toCalculator.spec.ts && tsx src/features/vision/uploadLimits.spec.ts && tsx src/features/analytics/demandSample.spec.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

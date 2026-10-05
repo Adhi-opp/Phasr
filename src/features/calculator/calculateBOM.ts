@@ -29,9 +29,12 @@ import {
   type WireGaugeKey,
 } from "./constants";
 import {
+  describeSupplyRule,
+  exceedsSinglePhaseLimit,
   resolveRegulatoryPhasePolicy,
   type RegulatoryPolicyResult,
 } from "./regulatoryPolicy";
+import { MAX_BREAKER_FOR_GAUGE } from "./boardEngine";
 
 import type {
   CalculatorInput,
@@ -173,7 +176,7 @@ function generateAllCircuits(
         roomName: roomNames.length === 1 ? roomNames[0] : `Floor ${floor} shared`,
         floor,
         wireGauge: "1.5",
-        mcbRatingAmps: 10,
+        mcbRatingAmps: CIRCUIT_TYPES.LIGHTING.mcbRatingAmps,
         pointCount,
         pointDescription: desc,
         wireLengthMeters: wireRun,
@@ -210,7 +213,7 @@ function generateAllCircuits(
         roomName: roomNames.length === 1 ? roomNames[0] : `Floor ${floor} power`,
         floor,
         wireGauge: "2.5",
-        mcbRatingAmps: 16,
+        mcbRatingAmps: CIRCUIT_TYPES.POWER_15A.mcbRatingAmps,
         pointCount,
         pointDescription: `${pointCount}× 15A socket (${roomNames.join(", ")})`,
         wireLengthMeters: wireRun,
@@ -232,7 +235,7 @@ function generateAllCircuits(
           roomName: room.name,
           floor,
           wireGauge: "4.0",
-          mcbRatingAmps: 20,
+          mcbRatingAmps: CIRCUIT_TYPES.HEAVY_APPLIANCE.mcbRatingAmps,
           pointCount: 1,
           pointDescription: `Dedicated AC/Geyser (${room.name})`,
           wireLengthMeters: wireRun,
@@ -253,7 +256,7 @@ function generateAllCircuits(
           roomName: room.name,
           floor,
           wireGauge: "6.0",
-          mcbRatingAmps: 32,
+          mcbRatingAmps: CIRCUIT_TYPES.COOKING_RANGE.mcbRatingAmps,
           pointCount: 1,
           pointDescription: `Cooking range / induction hob (${room.name})`,
           wireLengthMeters: wireRun,
@@ -330,6 +333,7 @@ function getMcbPricingCode(rating: number, type: "B" | "C"): PricingCode {
   if (rating === 16 && type === "C") return "MCB_16A_C";
   if (rating === 20 && type === "C") return "MCB_20A_C";
   if (rating === 32 && type === "C") return "MCB_32A_C";
+  if (rating === 40 && type === "C") return "MCB_40A_C";
   if (rating === 63 && type === "C") return "MCB_63A_C";
   throw new Error(`Unsupported MCB for pricing: ${rating}A Type ${type}`);
 }
@@ -575,11 +579,12 @@ export function calculateBOM(
     maxDemandKw > ENGINEERING_THREE_PHASE_THRESHOLD_KW ? "THREE" : "SINGLE";
   const regulatoryPolicy = regulatoryOverride ?? resolveRegulatoryPhasePolicy(input);
   const regulatoryRecommendation: "SINGLE" | "THREE" =
-    totalConnectedLoadKw > regulatoryPolicy.connectedLoadThresholdKw ? "THREE" : "SINGLE";
+    exceedsSinglePhaseLimit(totalConnectedLoadKw, regulatoryPolicy) ? "THREE" : "SINGLE";
   const recommendedPhase: "SINGLE" | "THREE" =
     engineeringRecommendation === "THREE" || regulatoryRecommendation === "THREE"
       ? "THREE"
       : "SINGLE";
+  const supplyRule = describeSupplyRule(regulatoryPolicy);
 
   const phaseReasons: string[] = [];
   if (engineeringRecommendation === "THREE") {
@@ -589,12 +594,12 @@ export function calculateBOM(
   }
   if (regulatoryRecommendation === "THREE") {
     phaseReasons.push(
-      `Regulatory connected load ${totalConnectedLoadKw.toFixed(2)} kW exceeds ${regulatoryPolicy.connectedLoadThresholdKw.toFixed(1)} kW threshold (${regulatoryPolicy.cityKey}).`
+      `Connected load ${totalConnectedLoadKw.toFixed(2)} kW: ${supplyRule}.`
     );
   }
   if (regulatoryRecommendation === "THREE" && engineeringRecommendation === "SINGLE") {
     warnings.push(
-      `3-Phase recommended: engineering demand is safe at ${maxDemandKw.toFixed(2)} kW, but local DISCOM threshold is ${regulatoryPolicy.connectedLoadThresholdKw.toFixed(1)} kW for connected load; your connected load is ${totalConnectedLoadKw.toFixed(2)} kW.`
+      `3-Phase recommended: engineering demand is safe at ${maxDemandKw.toFixed(2)} kW, but ${supplyRule}; your connected load is ${totalConnectedLoadKw.toFixed(2)} kW.`
     );
   }
 
@@ -623,9 +628,7 @@ feederCurrentAmps *= 1.25;
         `Maximum demand is ${maxDemandKw.toFixed(1)} kW (exceeds ${ENGINEERING_THREE_PHASE_THRESHOLD_KW} kW). Three-phase supply recommended.`
       );
     } else if (recommendedPhase === "THREE") {
-      warnings.push(
-        `Three-phase supply recommended based on connected load compliance policy (${regulatoryPolicy.cityKey} threshold: ${regulatoryPolicy.connectedLoadThresholdKw.toFixed(1)} kW).`
-      );
+      warnings.push(`Three-phase supply recommended: ${supplyRule}.`);
     } else {
       warnings.push(
         `Maximum demand is only ${maxDemandKw.toFixed(1)} kW. Single-phase supply is sufficient.`
@@ -634,15 +637,25 @@ feederCurrentAmps *= 1.25;
   }
 
   // --- Step 5: Add main feeder circuit (meter → DB) ---
+  // Every overload downstream flows through this cable and trips the main
+  // breaker, so the cable has to carry what that breaker lets through: the
+  // same conductor ceiling boardEngine enforces on every other circuit
+  // (40 A main → 10 mm², 63 A main → 16 mm²).
+  const mainBreakerAmps =
+    recommendedPhase === "THREE"
+      ? MAIN_SWITCH.THREE_PHASE.ratingAmps
+      : MAIN_SWITCH.SINGLE_PHASE.ratingAmps;
   const minimumFeederGauge: WireGaugeKey = recommendedPhase === "THREE" ? "10.0" : "6.0";
   const minimumFeederSize = WIRE_GAUGES[minimumFeederGauge].sizeSqMm;
   const feederGauge: WireGaugeKey =
     (Object.entries(WIRE_GAUGES) as [WireGaugeKey, (typeof WIRE_GAUGES)[WireGaugeKey]][])
       .sort((a, b) => a[1].sizeSqMm - b[1].sizeSqMm)
       .find(
-        ([, spec]) =>
-          spec.maxCurrentAmps >= feederCurrentAmps && spec.sizeSqMm >= minimumFeederSize
-      )?.[0] ?? minimumFeederGauge;
+        ([key, spec]) =>
+          spec.maxCurrentAmps >= feederCurrentAmps &&
+          spec.sizeSqMm >= minimumFeederSize &&
+          MAX_BREAKER_FOR_GAUGE[key] >= mainBreakerAmps
+      )?.[0] ?? "16.0";
   const feederLength = 8;
 
   allCircuits.push({
@@ -652,9 +665,7 @@ feederCurrentAmps *= 1.25;
     roomName: "Main Feeder (Meter → DB)",
     floor: input.dbFloor,
     wireGauge: feederGauge,
-    mcbRatingAmps: recommendedPhase === "THREE"
-      ? MAIN_SWITCH.THREE_PHASE.ratingAmps
-      : MAIN_SWITCH.SINGLE_PHASE.ratingAmps,
+    mcbRatingAmps: mainBreakerAmps,
     pointCount: 1,
     pointDescription: "Main feeder from energy meter to distribution board",
     wireLengthMeters: feederLength,
@@ -726,10 +737,7 @@ feederCurrentAmps *= 1.25;
     recommendedPhase === "THREE" ? MAIN_SWITCH.THREE_PHASE : MAIN_SWITCH.SINGLE_PHASE;
   const mainSwitchItem: BOMMainSwitch = {
     category: "MAIN_SWITCH",
-    pricingCode:
-      mainSwitchSpec.ratingAmps === 32 && mainSwitchSpec.poles === 2
-        ? "MAIN_SWITCH_32A_DP"
-        : "MAIN_SWITCH_63A_FP",
+    pricingCode: mainSwitchSpec.poles === 2 ? "MAIN_SWITCH_40A_DP" : "MAIN_SWITCH_63A_FP",
     ratingAmps: mainSwitchSpec.ratingAmps,
     poles: mainSwitchSpec.poles,
     quantity: 1,
@@ -776,6 +784,8 @@ feederCurrentAmps *= 1.25;
       finalRecommendation: recommendedPhase,
       connectedLoadThresholdKw: regulatoryPolicy.connectedLoadThresholdKw,
       regulatoryPolicyKey: regulatoryPolicy.cityKey,
+      threePhaseAtThreshold: regulatoryPolicy.threePhaseAtThreshold ?? false,
+      supplyAuthority: regulatoryPolicy.authority ?? null,
       reasons: phaseReasons,
     },
     totalCircuits: displayCircuits.length,

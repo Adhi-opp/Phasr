@@ -1,16 +1,31 @@
+import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { jar, login, action, get, check, summary } from "./lib.mjs";
 
 const prisma = new PrismaClient();
 
+// Server action IDs change from build to build, so they are looked up by
+// export name in the manifest of the build under test rather than pasted in.
+const manifest = JSON.parse(
+  readFileSync(new URL("../.next/server/server-reference-manifest.json", import.meta.url), "utf8")
+);
+const idByExport = Object.fromEntries(
+  Object.entries(manifest.node).map(([id, entry]) => [entry.exportedName, id])
+);
+function actionId(exportName) {
+  const id = idByExport[exportName];
+  if (!id) throw new Error(`No server action "${exportName}" in this build. Was it renamed? Rebuild first.`);
+  return id;
+}
+
 const A = {
-  accept: "4076c6d783e0ede8b0ad02269969402636a79e71e4",
-  reject: "40437780acd14ef1014f51e938bb916187105f5f39",
-  hide: "4064a013ae741208c4e053ef7066eaa0644c50e009",
-  submitQuote: "40c2d849db476985df9e9de94e1ac8d5299e144f9f",
-  saveProfile: "40dcd9cf215fbb86b3e7e4344b1efb39bcba3c0596",
-  createQuoteRequest: "608196895e99e9d66eb132d92fd817ec0b467783b4",
-  createPriceSnapshot: "60589cba746dfe014f0eb148c4ea47d407ffbe4653",
+  accept: actionId("acceptQuoteAction"),
+  reject: actionId("rejectQuoteAction"),
+  hide: actionId("hideQuoteAction"),
+  submitQuote: actionId("submitQuoteAction"),
+  saveProfile: actionId("saveDealerProfileAction"),
+  createQuoteRequest: actionId("createQuoteRequestAction"),
+  createPriceSnapshot: actionId("createPriceSnapshotAction"),
 };
 
 const home = await prisma.user.findUnique({ where: { email: "homeowner@voltflow.in" } });

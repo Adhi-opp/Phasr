@@ -15,8 +15,8 @@
 //   FRLS  flame retardant, low smoke — reduced smoke/HCl on burning
 //   ZHFR  zero halogen flame retardant — no halogen gases at all
 //
-// This matters for price comparison: two dealers quoting Polycab at FR and
-// ZHFR are not quoting the same job, and the cheaper one is not the better
+// This matters for price comparison: two dealers quoting the same brand at FR
+// and ZHFR are not quoting the same job, and the cheaper one is not the better
 // deal. That is the entire reason the column exists.
 // ============================================================================
 

@@ -124,10 +124,16 @@ export const RATE_CARD: Record<PricingCode, RateCardEntry> = {
   MCB_16A_C: { rate: 380, basis: "per_piece", source: "FINAL" },
   MCB_20A_C: { rate: 420, basis: "per_piece", source: "FINAL" },
   MCB_32A_C: { rate: 650, basis: "per_piece", source: "FINAL" },
+  // 40 A parts: estimated from the 32 A and 63 A rates beside them, not
+  // quoted, so PROVISIONAL until a dealer price replaces them.
+  MCB_40A_C: { rate: 700, basis: "per_piece", source: "PROVISIONAL" },
   MCB_63A_C: { rate: 950, basis: "per_piece", source: "PROVISIONAL" },
   RCCB_40A_2P_30MA: { rate: 1800, basis: "per_piece", source: "FINAL" },
   RCCB_63A_4P_30MA: { rate: 3600, basis: "per_piece", source: "PROVISIONAL" },
+  // Kept so BOMs saved before the 40 A main can still be priced; the engine
+  // no longer emits it.
   MAIN_SWITCH_32A_DP: { rate: 1200, basis: "per_piece", source: "FINAL" },
+  MAIN_SWITCH_40A_DP: { rate: 1300, basis: "per_piece", source: "PROVISIONAL" },
   MAIN_SWITCH_63A_FP: { rate: 2400, basis: "per_piece", source: "PROVISIONAL" },
   DB_GENERIC: { rate: 3200, basis: "per_piece", source: "FINAL" },
 
