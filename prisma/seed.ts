@@ -162,7 +162,7 @@ async function main() {
       state: "Delhi",
       pincode: "110019",
       serviceAreas: ["NCR", "DELHI", "NOIDA", "GURUGRAM"],
-      brandsSold: ["Polycab", "Havells", "Finolex", "RR Kabel"],
+      brandsSold: ["Value range", "Standard range", "Premium range"],
       approvalStatus: "APPROVED",
       subscriptionTier: "BASIC",
     },
@@ -194,7 +194,7 @@ async function main() {
       state: "Uttar Pradesh",
       pincode: "201301",
       serviceAreas: ["NCR", "NOIDA", "GHAZIABAD"],
-      brandsSold: ["Finolex", "KEI"],
+      brandsSold: ["Standard range"],
       approvalStatus: "PENDING",
     },
   });
@@ -257,7 +257,7 @@ async function main() {
       dealerId: dealer.id,
       clientRequestId: "seed-quote-001",
       totalPrice: 42000,
-      brandOffered: "Polycab",
+      brandOffered: "Value range",
       wireGrade: "FR",
       deliveryDays: 3,
       status: "SUBMITTED",
@@ -273,7 +273,7 @@ async function main() {
       dealerId: pendingDealer.id,
       clientRequestId: "seed-quote-002",
       totalPrice: 47500,
-      brandOffered: "Finolex",
+      brandOffered: "Standard range",
       wireGrade: "FRLS",
       deliveryDays: 5,
       status: "SUBMITTED",
@@ -337,7 +337,8 @@ async function main() {
   // the single-phase board schedule — the stacked-list layout with a DP
   // incomer, which is what most NCR flats actually get. This is the fixture
   // for that path. Saved as a DRAFT so it does not add noise to the dealer
-  // board; open it from the homeowner's dashboard.
+  // board; open it from the homeowner's dashboard. Request Dealer Quotes
+  // there sends it, so a re-seed puts it back to a draft with no bids.
 
   const layoutC: LayoutInput = {
     propertyType: "FLAT",
@@ -356,7 +357,12 @@ async function main() {
 
   const projectC = await prisma.project.upsert({
     where: { id: "seed-project-003" },
-    update: { bomData: asJson(bomC), totalEstimate: bomC.pricing.materialCost },
+    update: {
+      status: "ESTIMATED",
+      inputData: { source: "SEED", layout: asJson(layoutC) },
+      bomData: asJson(bomC),
+      totalEstimate: bomC.pricing.materialCost,
+    },
     create: {
       id: "seed-project-003",
       ownerId: homeowner.id,
@@ -369,9 +375,10 @@ async function main() {
     },
   });
 
+  await prisma.quote.deleteMany({ where: { quoteRequest: { projectId: projectC.id } } });
   await prisma.quoteRequest.upsert({
     where: { projectId: projectC.id },
-    update: {},
+    update: { status: "DRAFT", quoteCount: 0, expiresAt: null },
     create: {
       projectId: projectC.id,
       status: "DRAFT",
@@ -396,16 +403,19 @@ async function main() {
   // These values intentionally match the wire rates in RATE_CARD, so seeding
   // changes no estimate. They are dealer rates (the reference price), not MRP.
   //
-  // Sep 2026: raised from 18/28/48/72. The printed MRP of a Polycab Etira FR
-  // 90 m coil is ₹3,690 for 1.5 sq mm and ₹5,890 for 2.5 sq mm — ₹41 and ₹65 a
-  // metre — and dealers buy roughly 30–40% below that, so the old rates sat
-  // under any dealer's own cost. See TRADE_DISCOUNT in costEngine.ts.
+  // Sep 2026: raised from 18/28/48/72. Printed FR coil MRPs work out to about
+  // ₹41 (1.5 sq mm) and ₹65 (2.5 sq mm) a metre, and dealers buy roughly
+  // 30–40% below that, so the old rates sat under any dealer's own cost. The
+  // source prices and TRADE_DISCOUNT are documented in costEngine.ts.
+  //
+  // brand is part of the row's key, not a real brand: these are one generic
+  // reference rate per gauge.
 
   const wireRates = [
-    { wireType: "1.5 sq mm FR PVC", brand: "Polycab", unitPrice: 26 },
-    { wireType: "2.5 sq mm FR PVC", brand: "Polycab", unitPrice: 41 },
-    { wireType: "4.0 sq mm FR PVC", brand: "Polycab", unitPrice: 65 },
-    { wireType: "6.0 sq mm FR PVC", brand: "Polycab", unitPrice: 97 },
+    { wireType: "1.5 sq mm FR PVC", brand: "Reference FR", unitPrice: 26 },
+    { wireType: "2.5 sq mm FR PVC", brand: "Reference FR", unitPrice: 41 },
+    { wireType: "4.0 sq mm FR PVC", brand: "Reference FR", unitPrice: 65 },
+    { wireType: "6.0 sq mm FR PVC", brand: "Reference FR", unitPrice: 97 },
   ];
 
   for (const rate of wireRates) {

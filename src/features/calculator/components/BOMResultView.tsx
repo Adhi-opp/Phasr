@@ -341,6 +341,9 @@ function PhaseNotice({ result }: { result: EnrichedBOMResult }) {
 
   if (!isOverride) return null;
 
+  const { supplyAuthority, regulatoryPolicyKey, threePhaseAtThreshold, connectedLoadThresholdKw } =
+    result.phaseDecision;
+
   return (
     <div className="flex gap-2.5 border border-slate-200 bg-white px-3 py-2.5 text-xs leading-relaxed text-slate-600">
       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
@@ -348,11 +351,11 @@ function PhaseNotice({ result }: { result: EnrichedBOMResult }) {
         <span className="font-medium text-slate-900">3-Phase recommended.</span>{" "}
         Engineering demand is within single-phase limits (
         <span className="spec-num">{formatKw(result.maxDemandKw)}</span>), but{" "}
-        {result.phaseDecision.regulatoryPolicyKey} DISCOM policy typically requires
-        3-phase above{" "}
-        <span className="spec-num">
-          {result.phaseDecision.connectedLoadThresholdKw.toFixed(1)} kW
-        </span>{" "}
+        {supplyAuthority
+          ? `${supplyAuthority} supplies three phase`
+          : `${regulatoryPolicyKey} DISCOM policy typically requires 3-phase`}{" "}
+        {threePhaseAtThreshold ? "from" : "above"}{" "}
+        <span className="spec-num">{connectedLoadThresholdKw.toFixed(1)} kW</span>{" "}
         connected load. Yours is{" "}
         <span className="spec-num">{formatKw(result.totalConnectedLoadKw)}</span>.
       </p>

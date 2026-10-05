@@ -119,6 +119,9 @@ export default async function DealerDashboardPage() {
       // (no cron in this project), so the deadline is applied at read time.
       // Legacy rows have no expiresAt and stay visible.
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      // And full ones. A full request stays OPEN while its buyer chooses
+      // between the bids already in, but it takes no more (isTakingBids).
+      quoteCount: { lt: prisma.quoteRequest.fields.maxQuotes },
     },
     include: {
       project: {

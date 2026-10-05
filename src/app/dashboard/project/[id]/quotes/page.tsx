@@ -6,10 +6,12 @@ import {
   getQuotesForProject,
   type ProjectQuoteView,
 } from "@/features/quotes/queries";
+import { RequestQuotesButton } from "@/features/quotes/RequestQuotesButton";
+import { buyerRequestState, type BuyerRequestState } from "@/features/quotes/validity";
 import {
+  DEMO_DASHBOARD_PROJECTS,
   DEMO_QUOTES,
   DEMO_PROJECT_NAME,
-  DEMO_RFQ_STATUS,
 } from "@/lib/demo-data";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -38,6 +40,18 @@ function formatProjectDisplay(name: string): { title: string; timestamp?: string
   return { title: name };
 }
 
+/** The line under the title: what state the request is in, in a sentence. */
+function summaryLine(state: BuyerRequestState, quoteCount: number): string {
+  if (state === "DRAFT") return "Saved as a draft. No dealer has seen it yet.";
+  if (quoteCount === 0) {
+    return state === "OPEN" ? "Awaiting dealer responses…" : "No quotes received.";
+  }
+  const received = `${quoteCount} quote${quoteCount === 1 ? "" : "s"} received — sorted by price (lowest first).`;
+  return state === "BIDDING_CLOSED"
+    ? `${received} Bidding has closed; you can accept any quote until its valid-until date.`
+    : received;
+}
+
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ demo?: string }>;
@@ -49,13 +63,13 @@ export default async function QuotesPage({ params, searchParams }: PageProps) {
 
   // ── Demo mode: completely bypass auth + Prisma (params.id ignored) ──────
   let projectName: string;
-  let rfqStatus: string;
+  let requestState: BuyerRequestState;
   let projectEstimate: number | null = null;
   let quotes: ProjectQuoteView[];
 
   if (isDemo) {
     projectName = DEMO_PROJECT_NAME;
-    rfqStatus = DEMO_RFQ_STATUS;
+    requestState = buyerRequestState(DEMO_DASHBOARD_PROJECTS[0].quoteRequest);
     quotes = DEMO_QUOTES;
     projectEstimate = 85000;
   } else {
@@ -76,7 +90,7 @@ export default async function QuotesPage({ params, searchParams }: PageProps) {
     }
 
     projectName = result.projectName;
-    rfqStatus = result.rfqStatus;
+    requestState = result.requestState;
     projectEstimate = result.projectEstimate;
     quotes = result.quotes;
   }
@@ -120,16 +134,24 @@ export default async function QuotesPage({ params, searchParams }: PageProps) {
           );
         })()}
         <p className="mt-1 text-sm text-muted-foreground">
-          {quotes.length === 0
-            ? rfqStatus === "OPEN"
-              ? "Awaiting dealer responses\u2026"
-              : "No quotes received yet."
-            : `${quotes.length} quote${quotes.length === 1 ? "" : "s"} received — sorted by price (lowest first).`}
+          {summaryLine(requestState, quotes.length)}
         </p>
       </div>
 
-      {quotes.length === 0 ? (
-        rfqStatus === "OPEN" ? (
+      {requestState === "DRAFT" && !isDemo ? (
+        <div className="border border-slate-200 bg-white px-4 py-10 text-center">
+          <p className="text-sm font-medium text-slate-900">
+            This estimate hasn&apos;t been sent to dealers.
+          </p>
+          <p className="mx-auto mt-1.5 max-w-md text-[13px] leading-relaxed text-slate-500">
+            Requesting quotes re-prices it at today&apos;s rates and opens it to approved
+            NCR dealers for 72 hours. Your contact details go only to the dealer whose quote
+            you accept.
+          </p>
+          <RequestQuotesButton projectId={projectId} className="mt-5" />
+        </div>
+      ) : quotes.length === 0 ? (
+        requestState === "OPEN" ? (
           <div className="space-y-4">
             <p className="text-center text-sm text-muted-foreground">
               BOM routed to verified NCR distributors. Awaiting calculations&hellip;
@@ -174,7 +196,7 @@ export default async function QuotesPage({ params, searchParams }: PageProps) {
         <QuotesClient
           quotes={quotes}
           projectEstimate={projectEstimate}
-          rfqStatus={rfqStatus}
+          requestDecided={requestState === "ACCEPTED"}
           demoMode={isDemo}
         />
       )}

@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
-import type { QuoteRequestStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
   DEMO_DASHBOARD_PROJECTS,
   DEMO_PROJECT_ID,
 } from "@/lib/demo-data";
+import { RequestQuotesButton } from "@/features/quotes/RequestQuotesButton";
+import { buyerRequestState, type BuyerRequestState } from "@/features/quotes/validity";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { specTableStyle } from "@/components/spec-sheet";
@@ -90,14 +91,18 @@ function cleanProjectName(name: string): string {
 // Badge config
 // ---------------------------------------------------------------------------
 
-const QUOTE_STATUS_CONFIG: Record<
-  QuoteRequestStatus,
+/** Keyed by where the request stands for its buyer, not by its stored status:
+    a full request is still OPEN in the database while its buyer chooses, and
+    nothing stores EXPIRED. See buyerRequestState. */
+const REQUEST_STATE_BADGE: Record<
+  BuyerRequestState,
   { label: string; variant: "secondary" | "default" | "destructive" | "outline" }
 > = {
   DRAFT: { label: "Draft", variant: "secondary" },
   OPEN: { label: "Open for Quotes", variant: "default" },
-  CLOSED: { label: "Closed", variant: "outline" },
+  BIDDING_CLOSED: { label: "Bidding Closed", variant: "outline" },
   EXPIRED: { label: "Expired", variant: "destructive" },
+  ACCEPTED: { label: "Quote Accepted", variant: "outline" },
 };
 
 // ---------------------------------------------------------------------------
@@ -131,6 +136,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       orderBy: { createdAt: "desc" },
     });
   }
+
+  // One clock for every row, so two requests cannot disagree about "now".
+  const now = new Date();
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 py-14 sm:px-6">
@@ -198,10 +206,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   const estimate =
                     bom?.pricing.materialCost ?? project.totalEstimate;
                   const qr = project.quoteRequest;
-                  const statusConfig =
-                    qr?.status in QUOTE_STATUS_CONFIG
-                      ? QUOTE_STATUS_CONFIG[qr.status as QuoteRequestStatus]
-                      : null;
+                  const requestState = qr ? buyerRequestState(qr, now) : null;
+                  const statusConfig = requestState ? REQUEST_STATE_BADGE[requestState] : null;
 
                   return (
                     <tr
@@ -236,7 +242,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        {qr ? (
+                        {requestState === "DRAFT" && !isDemo ? (
+                          // A draft has no quotes to view. Its one next step
+                          // is sending it, so that is what the row offers.
+                          <RequestQuotesButton
+                            projectId={project.id}
+                            size="sm"
+                            className="inline-block text-left"
+                          />
+                        ) : qr ? (
                           <Button
                             variant="ghost"
                             size="sm"

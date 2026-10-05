@@ -249,7 +249,7 @@ export default function DealerProfileSetupPage() {
             <Input
               id="brandsSold"
               className="h-9 text-[13px]"
-              placeholder="Polycab, Havells, Finolex, RR Kabel"
+              placeholder="The cable and switchgear brands you stock, comma-separated"
               value={form.brandsSold}
               onChange={(e) => update("brandsSold", e.target.value)}
               required

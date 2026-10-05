@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { RATE_CARD, type RateCard } from "./costEngine";
 import {
-  normalizeCityKey,
-  FALLBACK_NCR_THRESHOLD_KW,
   FALLBACK_DEFAULT_THRESHOLD_KW,
-  FALLBACK_NCR_CITY_KEYS,
+  ncrRuleFor,
+  normalizeCityKey,
   type RegulatoryPolicyResult,
 } from "./regulatoryPolicy";
 import type { PricingCode } from "./type";
@@ -76,8 +75,13 @@ export async function loadRateCardFromDb(): Promise<RateCard> {
 }
 
 /**
- * Async DB-aware resolver. Queries the RegulatoryPhasePolicy table first,
- * falls back to the hardcoded values if no active row is found or on error.
+ * Async DB-aware resolver, in order of precedence:
+ *   1. an active RegulatoryPhasePolicy row for this exact city (an admin
+ *      override, e.g. after a regulator changes its threshold);
+ *   2. the state rule for an NCR city (regulatoryPolicy.ts, with sources);
+ *   3. an active DEFAULT row;
+ *   4. the hardcoded default.
+ * A DEFAULT row must never shadow a known state rule, so (2) comes before (3).
  */
 export async function loadRegulatoryPolicyFromDb(
   city: string
@@ -99,7 +103,14 @@ export async function loadRegulatoryPolicyFromDb(
         connectedLoadThresholdKw: row.connectedLoadThresholdKw,
       };
     }
+  } catch {
+    // DB unavailable: fall through to the rules in code
+  }
 
+  const stateRule = ncrRuleFor(cityKey);
+  if (stateRule) return stateRule;
+
+  try {
     const defaultRow = await prisma.regulatoryPhasePolicy.findFirst({
       where: { cityKey: "DEFAULT", isActive: true },
       select: { cityKey: true, connectedLoadThresholdKw: true },
@@ -112,12 +123,8 @@ export async function loadRegulatoryPolicyFromDb(
       };
     }
   } catch {
-    // DB unavailable — fall through to hardcoded
+    // DB unavailable: fall through to the hardcoded default
   }
 
-  // Fallback to hardcoded
-  if (FALLBACK_NCR_CITY_KEYS.has(cityKey)) {
-    return { cityKey, connectedLoadThresholdKw: FALLBACK_NCR_THRESHOLD_KW };
-  }
   return { cityKey: "DEFAULT", connectedLoadThresholdKw: FALLBACK_DEFAULT_THRESHOLD_KW };
 }

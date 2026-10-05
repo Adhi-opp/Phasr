@@ -16,9 +16,10 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import {
   QUOTE_EXPIRY_WARNING_HOURS,
-  effectiveRfqStatus,
+  buyerRequestState,
   expiresWithinHours,
   isExpired,
+  type BuyerRequestState,
 } from "@/features/quotes/validity";
 
 /**
@@ -81,7 +82,7 @@ export type ProjectQuotesResult =
   | {
       ok: true;
       projectName: string;
-      rfqStatus: string;
+      requestState: BuyerRequestState;
       projectEstimate: number | null;
       quotes: ProjectQuoteView[];
     };
@@ -147,9 +148,10 @@ export async function getQuotesForProject(
   return {
     ok: true,
     projectName: project.projectName,
-    // Derived, not stored: nothing flips status to EXPIRED, so a lapsed
-    // request would otherwise keep presenting itself as open for quotes.
-    rfqStatus: rfq ? effectiveRfqStatus(rfq.status, rfq.expiresAt, now) : "CLOSED",
+    // Derived, not stored: nothing writes EXPIRED, and a full request stays
+    // OPEN until its buyer accepts a quote. A project with no request at all
+    // predates requests; it reads as one that ended with no quotes.
+    requestState: rfq ? buyerRequestState(rfq, now) : "EXPIRED",
     projectEstimate: project.totalEstimate,
     quotes:
       rfq?.quotes.map((q) => ({

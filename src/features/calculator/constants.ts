@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 // 1. WIRE GAUGE SPECIFICATIONS
 //    Coil lengths vary by gauge — this is NOT universal.
-//    Source: Polycab/Havells/Finolex standard packaging (Indian market)
+//    Source: standard coil packaging of the major Indian FR wire brands
 // ---------------------------------------------------------------------------
 
 export const WIRE_GAUGES = {
@@ -95,7 +95,10 @@ export const EARTH_WIRE = {
 export const CIRCUIT_TYPES = {
   LIGHTING: {
     wireGauge: "1.5" as WireGaugeKey,
-    mcbRatingAmps: 6, // 6A MCB Type B for lighting
+    // 10 A Type B. calculateBOM groups lights, fans, exhaust fans AND 5 A
+    // sockets onto these circuits, 8 points each, so 6 A would nuisance-trip;
+    // 10 A is also the fire-guard ceiling for 1.5 mm² (boardEngine.ts).
+    mcbRatingAmps: 10,
     mcbType: "B" as const,
     maxPointsPerCircuit: 10, // IS 732 recommends max 10 points per lighting circuit
     description: "Lights, fans, exhaust fans",
@@ -143,9 +146,13 @@ export const RCCB_SPECS = {
   THREE_PHASE: { poles: 4, ratingAmps: 63, sensitivityMa: 30 },
 } as const;
 
-// Main switch / isolator at the distribution board
+// Main switch / isolator at the distribution board. The single source for the
+// incomer rating: the BOM's main switch and main feeder MCB, and the board
+// schedule's incomer (boardEngine.ts) all read it, and match the RCCB above.
+// Single phase is 40 A, not 32: at the 7 kW single-phase ceiling a home draws
+// about 36 A at 0.85 power factor, which a 32 A main would trip on.
 export const MAIN_SWITCH = {
-  SINGLE_PHASE: { ratingAmps: 32, poles: 2 }, // DP (Double Pole)
+  SINGLE_PHASE: { ratingAmps: 40, poles: 2 }, // DP (Double Pole)
   THREE_PHASE: { ratingAmps: 63, poles: 4 },  // FP (Four Pole)
 } as const;
 

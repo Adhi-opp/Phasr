@@ -19,11 +19,13 @@
 // literally that is unsafe in one direction and wrong in another, so it is
 // implemented here as a CEILING rather than a fixed value:
 //
-//   * The engine already puts LIGHTING on a 6 A breaker. Forcing it up to 10 A
-//     makes the circuit LESS protected. This feature exists because breakers
-//     get over-specified; raising a correctly-sized one would be the same bug
-//     with our name on it. So the table caps a rating, and a lower rating that
-//     the engine already chose is left alone.
+//   * A rating below the ceiling is more protective, not less. calculateBOM's
+//     lighting circuits come out at exactly 10 A Type B, the 1.5 mm² ceiling,
+//     because they also carry 5 A sockets; but a lighting-only circuit
+//     requested at 6 A must stay at 6 A. Forcing it up to 10 A would make it
+//     LESS protected. This feature exists because breakers get over-specified;
+//     raising a correctly-sized one would be the same bug with our name on it.
+//     So the table caps a rating, and never raises one.
 //
 //   * Curve is derived from the circuit's own type, not forced to C. Type B
 //     trips at 3–5x rated current, Type C at 5–10x. Lighting and general
@@ -36,7 +38,7 @@
 // in `corrections` so the UI can show what was changed and why.
 // ============================================================================
 
-import { CIRCUIT_TYPES, WIRE_GAUGES } from "./constants";
+import { CIRCUIT_TYPES, MAIN_SWITCH, WIRE_GAUGES } from "./constants";
 import type { CircuitTypeKey, WireGaugeKey } from "./constants";
 import type { CircuitDefinition } from "./type";
 
@@ -140,8 +142,10 @@ const STANDARD_MCB_RATINGS = [6, 10, 16, 20, 25, 32, 40, 63] as const;
  * behind "just put a 32 A on everything".
  *
  * Each cap sits at or below the conductor's ampacity in WIRE_GAUGES.
+ * calculateBOM sizes the main feeder against it too, so the cable from the
+ * meter is never smaller than the main breaker it feeds.
  */
-const MAX_BREAKER_FOR_GAUGE: Record<WireGaugeKey, number> = {
+export const MAX_BREAKER_FOR_GAUGE: Record<WireGaugeKey, number> = {
   "1.0": 10, // ampacity 10 A
   "1.5": 10, // ampacity 15 A
   "2.5": 16, // ampacity 20 A
@@ -164,8 +168,14 @@ const SINGLE_PHASE_VOLTS = 230;
 const THREE_PHASE_LINE_VOLTS = 415;
 const RCCB_SENSITIVITY_MA = 30;
 
-/** Standard residential fitments, matching RCCB_SPECS in constants.ts. */
-const BASE_INCOMER_AMPS = { SINGLE: 40, THREE: 63 } as const;
+/**
+ * Standard residential fitments: the BOM's main switch (MAIN_SWITCH), so the
+ * schedule and the parts list can never disagree. They also match RCCB_SPECS.
+ */
+const BASE_INCOMER_AMPS = {
+  SINGLE: MAIN_SWITCH.SINGLE_PHASE.ratingAmps,
+  THREE: MAIN_SWITCH.THREE_PHASE.ratingAmps,
+} as const;
 
 const RAILS: readonly PhaseRail[] = ["R", "Y", "B"] as const;
 

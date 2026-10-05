@@ -3,9 +3,15 @@ import {
   QUOTE_EXPIRY_WARNING_HOURS,
   QUOTE_VALIDITY_HOURS,
   RFQ_LIFETIME_HOURS,
+  buyerRequestState,
+  dealerRfqStatus,
   effectiveRfqStatus,
   expiresWithinHours,
   isExpired,
+  isQuoteAcceptable,
+  isQuoteHideable,
+  isRequestFull,
+  isTakingBids,
   quoteValidUntilFrom,
   rfqExpiryFrom,
 } from "./validity";
@@ -115,4 +121,80 @@ run("a decided status is never overridden by the clock", () => {
   assert.equal(effectiveRfqStatus("CLOSED", past, NOW), "CLOSED");
   assert.equal(effectiveRfqStatus("DRAFT", past, NOW), "DRAFT");
   assert.equal(effectiveRfqStatus("EXPIRED", past, NOW), "EXPIRED");
+});
+
+// ---------------------------------------------------------------------------
+// Bidding, and the buyer's choice
+// ---------------------------------------------------------------------------
+
+const live = new Date(NOW.getTime() + DAY);
+const past = new Date(NOW.getTime() - HOUR);
+const request = (over: Partial<Parameters<typeof isTakingBids>[0]> = {}) => ({
+  status: "OPEN",
+  expiresAt: live,
+  quoteCount: 2,
+  maxQuotes: 5,
+  ...over,
+});
+
+run("a request is full exactly at its quote limit", () => {
+  assert.equal(isRequestFull(4, 5), false);
+  assert.equal(isRequestFull(5, 5), true);
+});
+
+run("dealers can bid only while a request is open, in time and not full", () => {
+  assert.equal(isTakingBids(request(), NOW), true);
+  assert.equal(isTakingBids(request({ quoteCount: 5 }), NOW), false);
+  assert.equal(isTakingBids(request({ expiresAt: past }), NOW), false);
+  assert.equal(isTakingBids(request({ status: "DRAFT", expiresAt: null }), NOW), false);
+  assert.equal(isTakingBids(request({ status: "CLOSED" }), NOW), false);
+});
+
+run("a dealer sees FULL on a request whose slots are taken", () => {
+  assert.equal(dealerRfqStatus(request({ quoteCount: 5 }), NOW), "FULL");
+  assert.equal(dealerRfqStatus(request(), NOW), "OPEN");
+  // Past its deadline it reads EXPIRED, full or not: the clock speaks first.
+  assert.equal(dealerRfqStatus(request({ quoteCount: 5, expiresAt: past }), NOW), "EXPIRED");
+  assert.equal(dealerRfqStatus(request({ status: "CLOSED", quoteCount: 5 }), NOW), "CLOSED");
+});
+
+run("the buyer's view of each stage of a request", () => {
+  assert.equal(buyerRequestState(request({ status: "DRAFT", expiresAt: null, quoteCount: 0 }), NOW), "DRAFT");
+  assert.equal(buyerRequestState(request(), NOW), "OPEN");
+  assert.equal(buyerRequestState(request({ quoteCount: 5 }), NOW), "BIDDING_CLOSED");
+  assert.equal(buyerRequestState(request({ expiresAt: past }), NOW), "BIDDING_CLOSED");
+  assert.equal(buyerRequestState(request({ expiresAt: past, quoteCount: 0 }), NOW), "EXPIRED");
+  assert.equal(buyerRequestState(request({ status: "CLOSED", quoteCount: 5 }), NOW), "ACCEPTED");
+});
+
+run("a full or timed-out request still lets the buyer accept a valid quote", () => {
+  // The bug this guards: filling the last slot set the request to CLOSED, and
+  // acceptance then refused every quote on it. Bidding ending is not the
+  // buyer's deadline; each quote's own validity is.
+  for (const r of [request({ quoteCount: 5 }), request({ expiresAt: past })]) {
+    const state = buyerRequestState(r, NOW);
+    const decided = state === "ACCEPTED";
+    assert.equal(state, "BIDDING_CLOSED");
+    assert.equal(isQuoteAcceptable({ status: "SUBMITTED", lapsed: false }, decided), true);
+  }
+});
+
+run("only a submitted, unlapsed quote on an undecided request is acceptable", () => {
+  assert.equal(isQuoteAcceptable({ status: "SUBMITTED", lapsed: false }, false), true);
+  assert.equal(isQuoteAcceptable({ status: "SUBMITTED", lapsed: true }, false), false);
+  assert.equal(isQuoteAcceptable({ status: "SUBMITTED", lapsed: false }, true), false);
+  assert.equal(isQuoteAcceptable({ status: "REJECTED", lapsed: false }, false), false);
+  assert.equal(isQuoteAcceptable({ status: "ACCEPTED", lapsed: false }, true), false);
+});
+
+run("Remove is offered only where nobody is left waiting", () => {
+  // The accepted row carries the dealer's contact details: never hideable.
+  assert.equal(isQuoteHideable({ status: "ACCEPTED", lapsed: false }, true), false);
+  assert.equal(isQuoteHideable({ status: "ACCEPTED", lapsed: true }, true), false);
+  // A quote the buyer could still accept has a dealer waiting on an answer.
+  assert.equal(isQuoteHideable({ status: "SUBMITTED", lapsed: false }, false), false);
+  // Lapsed, or overtaken by an accepted quote: stale, so it can go.
+  assert.equal(isQuoteHideable({ status: "SUBMITTED", lapsed: true }, false), true);
+  assert.equal(isQuoteHideable({ status: "SUBMITTED", lapsed: false }, true), true);
+  assert.equal(isQuoteHideable({ status: "REJECTED", lapsed: false }, false), true);
 });

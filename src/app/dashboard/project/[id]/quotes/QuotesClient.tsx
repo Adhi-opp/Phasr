@@ -22,6 +22,7 @@ import {
   hideQuoteAction,
   rejectQuoteAction,
 } from "@/features/quotes/actions";
+import { isQuoteHideable } from "@/features/quotes/validity";
 import {
   wireGradeDescription,
   wireGradeShort,
@@ -52,8 +53,9 @@ interface Props {
   quotes: QuoteData[];
   /** Project estimate, for the spread-vs-estimate summary row. */
   projectEstimate?: number | null;
-  /** Gates Remove on live quotes — see canRemove. */
-  rfqStatus?: string;
+  /** A quote on this request was accepted before the page loaded. Gates
+      Remove, through isQuoteHideable. */
+  requestDecided?: boolean;
   /**
    * Demo mode has no session, so the server action would reject every call.
    * Remove is handled locally instead, which is what the visitor is there to
@@ -63,20 +65,6 @@ interface Props {
 }
 
 type PendingAction = { id: string; kind: "accept" | "reject" };
-
-/**
- * Mirrors the guard in hideQuoteAction. Kept in sync deliberately: the server
- * is the authority, but offering a button that always errors is its own bug.
- *
- * A live quote on an open request is not removable — the dealer is waiting on
- * an answer, and the honest way to clear it is Reject. Once the request is
- * closed or expired nobody is waiting, so stale rows can go.
- */
-function canRemove(status: string, rfqStatus: string): boolean {
-  if (status === "ACCEPTED") return false;
-  if (status === "SUBMITTED") return rfqStatus !== "OPEN";
-  return true;
-}
 
 function formatINR(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
@@ -182,7 +170,7 @@ const LAPSED_HINT = "This price has lapsed — ask the dealer to requote.";
 export function QuotesClient({
   quotes: initialQuotes,
   projectEstimate,
-  rfqStatus = "CLOSED",
+  requestDecided = false,
   demoMode = false,
 }: Props) {
   const [quotes, setQuotes] = useState(initialQuotes);
@@ -275,10 +263,17 @@ export function QuotesClient({
       isAccepted: quote.status === "ACCEPTED",
       isLowest: lowest !== null && quote.totalPrice === lowest && !isRejected,
       delta: lowest !== null && !isRejected ? quote.totalPrice - lowest : null,
-      /** Accept/Reject on offer. Mirrors acceptQuoteAction's guards, so the
-          buyer is never handed a button the server will refuse. */
+      /** Accept/Reject on offer, on acceptQuoteAction's terms so the buyer is
+          never handed a button the server will refuse: until a quote is
+          accepted, with Accept disabled once this one's price has lapsed.
+          Bidding closing (72 hours, or every slot filled) changes nothing
+          here; each quote's own validity is the deadline. */
       decidable: isSubmitted && !hasAccepted,
-      removable: canRemove(quote.status, rfqStatus),
+      /** Remove: hideQuoteAction's rule, shared through isQuoteHideable. */
+      removable: isQuoteHideable(
+        { status: quote.status, lapsed: quote.hasLapsed },
+        requestDecided || hasAccepted
+      ),
       accepting: isMine("accept"),
       rejecting: isMine("reject"),
     };

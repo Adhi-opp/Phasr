@@ -135,8 +135,9 @@ model Project {
   // The copper index this estimate was priced against, so a saved BOQ can be
   // re-read at the rate it was generated with rather than today's. Optional:
   // projects saved before snapshots existed have none. Only ever set
-  // server-side when a project is created — never taken from a payload, or a
-  // caller could pin a quote to a stale, cheaper copper rate.
+  // server-side, when a project is created or when a draft is re-priced to be
+  // sent for quotes — never taken from a payload, or a caller could pin a
+  // quote to a stale, cheaper copper rate.
   priceSnapshotId  String?
   priceSnapshot    PriceSnapshot?   @relation(fields: [priceSnapshotId], references: [id], onDelete: Restrict)
 
@@ -155,6 +156,9 @@ model QuoteRequest {
   projectId        String             @unique
   project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   
+  // DRAFT until sent to dealers, OPEN until the buyer accepts a quote, then
+  // CLOSED. Being full or past expiresAt is derived, never stored: either
+  // stops new bids, neither ends the buyer's choice (features/quotes/validity).
   status           QuoteRequestStatus @default(OPEN)
   visibilityCity   String             // Essential for localizing dealer leads
   visibilityPincode String?
@@ -162,7 +166,9 @@ model QuoteRequest {
   quoteCount       Int                @default(0)
   
   quotes           Quote[]
-  
+
+  // When dealers could first see the request, which they read as its issue
+  // date. Set on creation, and reset when a saved draft is sent.
   createdAt        DateTime           @default(now())
   expiresAt        DateTime?
 

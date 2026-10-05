@@ -518,7 +518,7 @@ export function RfqDetailClient({
                     className="h-9"
                     value={brandOffered}
                     onChange={(e) => setBrandOffered(e.target.value)}
-                    placeholder="Polycab"
+                    placeholder="The cable brand you will supply"
                     required
                     disabled={submitted}
                   />
