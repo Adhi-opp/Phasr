@@ -216,6 +216,7 @@ export function statusTone(
     case "EXPIRED":
       return "bad";
     case "CLOSED":
+    case "FULL":
       return "muted";
     default:
       return "neutral";

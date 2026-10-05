@@ -26,6 +26,7 @@ const A = {
   saveProfile: actionId("saveDealerProfileAction"),
   createQuoteRequest: actionId("createQuoteRequestAction"),
   createPriceSnapshot: actionId("createPriceSnapshotAction"),
+  requestQuotes: actionId("requestQuotesAction"),
 };
 
 const home = await prisma.user.findUnique({ where: { email: "homeowner@voltflow.in" } });
@@ -507,6 +508,225 @@ console.log("\n=== 16. COPPER PRICE SNAPSHOTS ===");
   } finally {
     if (projectId) await prisma.project.delete({ where: { id: projectId } });
     if (made.length) await prisma.priceSnapshot.deleteMany({ where: { id: { in: made } } });
+  }
+}
+
+console.log("\n=== 17. A FULL REQUEST CAN STILL BE AWARDED ===");
+{
+  // Filling the last slot used to set the request to CLOSED, after which its
+  // buyer could accept none of the bids on it.
+  const FID = "e2e-full";
+  await prisma.project.deleteMany({ where: { id: FID } });
+  try {
+    const p = await prisma.project.create({
+      data: {
+        id: FID, ownerId: home.id, projectName: "E2E full request", projectType: "RESIDENTIAL",
+        status: "RFQ_SUBMITTED", inputData: {},
+        bomData: { pricing: { materialCost: 50000 }, totalConnectedLoadKw: 6, maxDemandKw: 4 },
+        totalEstimate: 50000,
+      },
+    });
+    const rfq = await prisma.quoteRequest.create({
+      data: {
+        projectId: p.id, status: "OPEN", visibilityCity: "NCR", maxQuotes: 2, quoteCount: 1,
+        expiresAt: new Date(Date.now() + 72 * 3600e3),
+      },
+    });
+    const first = await prisma.quote.create({
+      data: {
+        quoteRequestId: rfq.id, dealerId: dealer2.id, clientRequestId: "e2e-full-q1",
+        totalPrice: 51000, brandOffered: "Standard range", wireGrade: "FRLS", deliveryDays: 4,
+        status: "SUBMITTED", validUntil: new Date(Date.now() + 72 * 3600e3),
+      },
+    });
+    const listed = (body) => body.includes(`/dealer/rfq/${rfq.id}`);
+
+    check("a request with a free slot is on the dealer board", listed((await get(dlr, "/dealer/dashboard")).body));
+
+    // Full of other dealers' bids: off the board, and the form is withheld.
+    await prisma.quoteRequest.update({ where: { id: rfq.id }, data: { maxQuotes: 1 } });
+    check("a full request leaves the dealer board", !listed((await get(dlr, "/dealer/dashboard")).body));
+    const fullDetail = await get(dlr, `/dealer/rfq/${rfq.id}`);
+    check(
+      "its requisition reads FULL and takes no bid",
+      fullDetail.body.includes("FULL") && fullDetail.body.includes("not accepting bids")
+    );
+    const refused = await action(dlr, `/dealer/rfq/${rfq.id}`, A.submitQuote, [
+      { quoteRequestId: rfq.id, clientRequestId: crypto.randomUUID(), totalPrice: 49000, brandOffered: "Value range", wireGrade: "FR" },
+    ]);
+    check("a bid on it is refused", refused.result?.errorCode === "MAX_QUOTES_REACHED", JSON.stringify(refused.result));
+    await prisma.quoteRequest.update({ where: { id: rfq.id }, data: { maxQuotes: 2 } });
+
+    // Now fill the last slot through the action itself.
+    const bid = await action(dlr, `/dealer/rfq/${rfq.id}`, A.submitQuote, [
+      { quoteRequestId: rfq.id, clientRequestId: crypto.randomUUID(), totalPrice: 49000, brandOffered: "Value range", wireGrade: "FR", deliveryDays: 3 },
+    ]);
+    check("the last slot is filled", bid.result?.success === true, JSON.stringify(bid.result));
+    const full = await prisma.quoteRequest.findUnique({ where: { id: rfq.id } });
+    check(
+      "a full request stays OPEN for its buyer",
+      full.status === "OPEN" && full.quoteCount === 2,
+      `${full.status} ${full.quoteCount}`
+    );
+    check(
+      "the buyer is told bidding has closed",
+      (await get(buyer, `/dashboard/project/${FID}/quotes`)).body.includes("Bidding has closed")
+    );
+
+    const accept = await action(buyer, `/dashboard/project/${FID}/quotes`, A.accept, [first.id]);
+    check("the buyer accepts a bid on a full request", accept.result?.success === true, JSON.stringify(accept.result));
+    const [won, after] = await Promise.all([
+      prisma.quote.findUnique({ where: { id: first.id } }),
+      prisma.quoteRequest.findUnique({ where: { id: rfq.id } }),
+    ]);
+    check("and only that closes it", won.status === "ACCEPTED" && after.status === "CLOSED", `${won.status} ${after.status}`);
+  } finally {
+    await prisma.project.deleteMany({ where: { id: FID } });
+  }
+}
+
+console.log("\n=== 18. AFTER THE 72 HOURS, A VALID BID CAN STILL BE ACCEPTED ===");
+{
+  const { p, q1, q2 } = await reset();
+  await prisma.quoteRequest.update({
+    where: { projectId: p.id },
+    data: { expiresAt: new Date(Date.now() - 3600e3) },
+  });
+  // Bidding is over. q1's price still holds; q2's has lapsed.
+  await prisma.quote.update({ where: { id: q2.id }, data: { validUntil: new Date(Date.now() - 60e3) } });
+
+  const page = await get(buyer, `/dashboard/project/${p.id}/quotes`);
+  check("the buyer is told bidding has closed", page.body.includes("Bidding has closed"));
+
+  const hideLive = await action(buyer, `/dashboard/project/${p.id}/quotes`, A.hide, [q1.id]);
+  check(
+    "a bid that can still be accepted cannot be hidden",
+    hideLive.result?.success === false && /Reject this quote first/.test(hideLive.result?.error ?? ""),
+    JSON.stringify(hideLive.result)
+  );
+  const hideLapsed = await action(buyer, `/dashboard/project/${p.id}/quotes`, A.hide, [q2.id]);
+  check("a lapsed bid can be hidden", hideLapsed.result?.success === true, JSON.stringify(hideLapsed.result));
+
+  const accept = await action(buyer, `/dashboard/project/${p.id}/quotes`, A.accept, [q1.id]);
+  check(
+    "a bid inside its validity is accepted after bidding closed",
+    accept.result?.success === true,
+    JSON.stringify(accept.result)
+  );
+}
+
+console.log("\n=== 19. A SAVED DRAFT CAN BE SENT FOR QUOTES ===");
+{
+  let projectId = null;
+  const STALE = "e2e-stale-draft";
+  try {
+    const layout = {
+      propertyType: "FLAT", city: "Gurugram", bedrooms: 2, bathrooms: 2, balconies: 1,
+      totalFloors: 1, modularKitchen: false, acInBedrooms: true, acInLivingRoom: true,
+      geyserInBathrooms: true,
+    };
+    const saved = await action(buyer, "/calculator", A.createQuoteRequest, [layout, "DRAFT"]);
+    const qrId = saved.result?.quoteRequestId;
+    const draft = qrId
+      ? await prisma.quoteRequest.findUnique({ where: { id: qrId }, include: { project: true } })
+      : null;
+    projectId = draft?.project.id ?? null;
+    check(
+      "a draft is saved on an ESTIMATED project",
+      draft?.status === "DRAFT" && draft.project.status === "ESTIMATED",
+      JSON.stringify(saved.result)
+    );
+
+    check("the dashboard offers to send it", (await get(buyer, "/dashboard")).body.includes("Request Dealer Quotes"));
+    const onBoard = async () => (await get(dlr, "/dealer/dashboard")).body.includes(`/dealer/rfq/${qrId}`);
+    check("dealers cannot see a draft", !(await onBoard()));
+
+    // A dealer and a different buyer account. Assert the outcome, not a
+    // payload: a dealer is redirected away from /dashboard before the action
+    // runs, while the admin, a buyer role, reaches its ownership check.
+    const byDealer = await action(dlr, "/dealer/dashboard", A.requestQuotes, [projectId]);
+    const byAdmin = await action(adm, "/dashboard", A.requestQuotes, [projectId]);
+    const untouched = await prisma.quoteRequest.findUnique({ where: { id: qrId } });
+    check(
+      "neither a dealer nor another account can send it",
+      byDealer.result?.success !== true &&
+        byAdmin.result?.errorCode === "FORBIDDEN" &&
+        untouched.status === "DRAFT",
+      `dealer=${JSON.stringify(byDealer.result)} admin=${JSON.stringify(byAdmin.result)} status=${untouched.status}`
+    );
+
+    // Age the draft and stale its stored price, so that resetting the issue
+    // date and re-pricing from the saved layout are both visible.
+    await prisma.quoteRequest.update({
+      where: { id: qrId },
+      data: { createdAt: new Date(Date.now() - 20 * 864e5) },
+    });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { totalEstimate: 1, bomData: { pricing: { materialCost: 1 } } },
+    });
+
+    const sent = await action(buyer, `/dashboard/project/${projectId}/quotes`, A.requestQuotes, [projectId]);
+    check(
+      "the owner sends it, as the same request",
+      sent.result?.success === true && sent.result?.quoteRequestId === qrId,
+      JSON.stringify(sent.result)
+    );
+    const open = await prisma.quoteRequest.findUnique({ where: { id: qrId }, include: { project: true } });
+    check(
+      "it is OPEN for 72 hours from now",
+      open.status === "OPEN" &&
+        open.expiresAt != null &&
+        Math.abs(open.expiresAt.getTime() - Date.now() - 72 * 3600e3) < 3600e3,
+      `${open.status} ${open.expiresAt}`
+    );
+    check("issued today, so dealers see it as new", Math.abs(open.createdAt.getTime() - Date.now()) < 3600e3, String(open.createdAt));
+    check("the project reads RFQ_SUBMITTED", open.project.status === "RFQ_SUBMITTED", open.project.status);
+    check(
+      "re-priced from the saved layout when sent",
+      open.project.totalEstimate > 10000 &&
+        open.project.bomData?.pricing?.materialCost === open.project.totalEstimate &&
+        Array.isArray(open.project.bomData?.items),
+      String(open.project.totalEstimate)
+    );
+    check("dealers can now see it", await onBoard());
+    check(
+      "the buyer's page now waits for dealers",
+      (await get(buyer, `/dashboard/project/${projectId}/quotes`)).body.includes("Awaiting dealer responses")
+    );
+
+    const again = await action(buyer, `/dashboard/project/${projectId}/quotes`, A.requestQuotes, [projectId]);
+    check(
+      "sending it twice is refused",
+      again.result?.errorCode === "ALREADY_SENT",
+      JSON.stringify(again.result)
+    );
+    const objectId = await action(buyer, "/dashboard", A.requestQuotes, [{ not: "an id" }]);
+    check(
+      "an object in place of an id is refused",
+      objectId.result?.errorCode === "VALIDATION_ERROR",
+      JSON.stringify(objectId.result)
+    );
+
+    // A draft whose saved layout today's calculator rejects is not sent.
+    await prisma.project.deleteMany({ where: { id: STALE } });
+    await prisma.project.create({
+      data: {
+        id: STALE, ownerId: home.id, projectName: "E2E stale draft", projectType: "RESIDENTIAL",
+        status: "ESTIMATED", inputData: { layout: { propertyType: "CASTLE" } }, totalEstimate: 1,
+        quoteRequest: { create: { status: "DRAFT", visibilityCity: "NCR", maxQuotes: 5, quoteCount: 0 } },
+      },
+    });
+    const stale = await action(buyer, "/dashboard", A.requestQuotes, [STALE]);
+    const staleRfq = await prisma.quoteRequest.findUnique({ where: { projectId: STALE } });
+    check(
+      "a draft from an older calculator is refused, and stays a draft",
+      stale.result?.errorCode === "ESTIMATE_OUTDATED" && staleRfq.status === "DRAFT",
+      JSON.stringify(stale.result)
+    );
+  } finally {
+    if (projectId) await prisma.project.deleteMany({ where: { id: projectId } });
+    await prisma.project.deleteMany({ where: { id: STALE } });
   }
 }
 

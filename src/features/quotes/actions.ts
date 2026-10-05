@@ -2,11 +2,13 @@
 
 import { Prisma, QuoteRequestStatus } from "@prisma/client";
 import { z } from "zod";
+import type { EnrichedBOMResult } from "@/features/calculator/costEngine";
 import { isNcrCityKey } from "@/features/calculator/regulatoryPolicy";
 import { runEstimate } from "@/features/calculator/runEstimate";
 import { WIRE_GRADES } from "@/features/quotes/wireGrade";
 import {
   isExpired,
+  isQuoteHideable,
   quoteValidUntilFrom,
   rfqExpiryFrom,
 } from "@/features/quotes/validity";
@@ -285,22 +287,16 @@ async function submitQuoteTransaction(
         select: { id: true },
       });
 
-      const updatedRequest = await tx.quoteRequest.update({
+      // The request stays OPEN when this bid fills its last slot. It used to
+      // be set to CLOSED here, and acceptQuoteAction refuses anything that is
+      // not OPEN, so the buyer could accept none of the bids that had just
+      // filled it: the most contested requests were the ones nobody could
+      // award. The quoteCount check above is what stops a further bid, and
+      // dealer screens read fullness from the count (isTakingBids).
+      await tx.quoteRequest.update({
         where: { id: input.quoteRequestId },
-        data: {
-          quoteCount: {
-            increment: 1,
-          },
-        },
-        select: { quoteCount: true, maxQuotes: true, status: true },
+        data: { quoteCount: { increment: 1 } },
       });
-
-      if (updatedRequest.status === "OPEN" && updatedRequest.quoteCount >= updatedRequest.maxQuotes) {
-        await tx.quoteRequest.update({
-          where: { id: input.quoteRequestId },
-          data: { status: "CLOSED" },
-        });
-      }
 
       // No counter increment here any more. quotesThisMonth was a stored tally
       // with nothing to reset it; the count is now derived on demand by
@@ -439,70 +435,14 @@ export async function createQuoteRequestAction(
       };
     });
 
-    // Awaited, not fire-and-forget: a serverless runtime may freeze this
-    // invocation the moment the response is returned, dropping any promise
-    // still in flight. The admin BOM email is how quotes get sourced
-    // manually, so losing it silently would break the whole early loop.
-    await sendAdminProjectSavedNotification({
+    await notifyRequestSaved({
       saveMode: quoteRequestStatus,
       projectId: created.projectId,
       quoteRequestId: created.quoteRequestId,
-      projectName: `Estimate - ${savedAt}`,
-      estimateValue: projectData.pricing.materialCost,
-      city: visibilityCity,
-      totalConnectedLoadKw: projectData.totalConnectedLoadKw,
-      maxDemandKw: projectData.maxDemandKw,
-      phase:
-        projectData.phaseDecision.finalRecommendation === "THREE"
-          ? "3-Phase"
-          : "Single Phase",
-      itemCount: projectData.items.length,
-      bomDataJson: JSON.stringify(projectData, null, 2),
-    }).catch((e) =>
-      // Swallowed deliberately: a failed notification must not fail the save.
-      logger.error("Email: admin project notification failed", {
-        error: String(e),
-      })
-    );
-
-    // Notify matching dealers. allSettled so one bad address cannot reject
-    // the batch, and awaited so none of the sends are cut off mid-flight.
-    if (quoteRequestStatus === "OPEN") {
-      try {
-        const dealers = await prisma.dealerProfile.findMany({
-          where: {
-            approvalStatus: "APPROVED",
-            OR: [
-              { city: { equals: visibilityCity, mode: "insensitive" } },
-              { serviceAreas: { has: visibilityCity } },
-            ],
-          },
-          include: { user: { select: { email: true, name: true } } },
-        });
-
-        const results = await Promise.allSettled(
-          dealers.map((d) =>
-            sendNewRfqNotification(d.user.email, {
-              dealerName: d.user.name ?? d.companyName,
-              projectName: `Estimate — ${savedAt}`,
-              estimateValue: projectData.pricing.materialCost,
-              rfqCity: visibilityCity,
-            })
-          )
-        );
-
-        results.forEach((r, i) => {
-          if (r.status === "rejected") {
-            logger.error("Email: new RFQ notification failed", {
-              error: String(r.reason),
-              dealer: dealers[i]?.user.email,
-            });
-          }
-        });
-      } catch (e) {
-        logger.error("Email: dealer lookup failed", { error: String(e) });
-      }
-    }
+      projectName: `Estimate — ${savedAt}`,
+      visibilityCity,
+      estimate: projectData,
+    });
 
     return {
       success: true,
@@ -519,6 +459,264 @@ export async function createQuoteRequestAction(
       error: "Failed to save project. Please try again.",
     };
   }
+}
+
+/**
+ * The emails that follow a request being saved or opened: the admin's copy of
+ * the BOM, and for an open request, every approved dealer serving its area.
+ *
+ * Awaited, not fire-and-forget: a serverless runtime may freeze the invocation
+ * the moment the response is returned, dropping any promise still in flight.
+ * The admin BOM email is how quotes get sourced manually, so losing it
+ * silently would break the whole early loop. Failures are logged and
+ * swallowed: a failed notification must not fail the save.
+ */
+async function notifyRequestSaved(args: {
+  saveMode: "DRAFT" | "OPEN";
+  projectId: string;
+  quoteRequestId: string;
+  projectName: string;
+  visibilityCity: string;
+  estimate: EnrichedBOMResult;
+}): Promise<void> {
+  const { saveMode, visibilityCity, estimate } = args;
+
+  await sendAdminProjectSavedNotification({
+    saveMode,
+    projectId: args.projectId,
+    quoteRequestId: args.quoteRequestId,
+    projectName: args.projectName,
+    estimateValue: estimate.pricing.materialCost,
+    city: visibilityCity,
+    totalConnectedLoadKw: estimate.totalConnectedLoadKw,
+    maxDemandKw: estimate.maxDemandKw,
+    phase:
+      estimate.phaseDecision.finalRecommendation === "THREE"
+        ? "3-Phase"
+        : "Single Phase",
+    itemCount: estimate.items.length,
+    bomDataJson: JSON.stringify(estimate, null, 2),
+  }).catch((e) =>
+    logger.error("Email: admin project notification failed", {
+      error: String(e),
+    })
+  );
+
+  if (saveMode !== "OPEN") return;
+
+  // allSettled so one bad address cannot reject the batch.
+  try {
+    const dealers = await prisma.dealerProfile.findMany({
+      where: {
+        approvalStatus: "APPROVED",
+        OR: [
+          { city: { equals: visibilityCity, mode: "insensitive" } },
+          { serviceAreas: { has: visibilityCity } },
+        ],
+      },
+      include: { user: { select: { email: true, name: true } } },
+    });
+
+    const results = await Promise.allSettled(
+      dealers.map((d) =>
+        sendNewRfqNotification(d.user.email, {
+          dealerName: d.user.name ?? d.companyName,
+          projectName: args.projectName,
+          estimateValue: estimate.pricing.materialCost,
+          rfqCity: visibilityCity,
+        })
+      )
+    );
+
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        logger.error("Email: new RFQ notification failed", {
+          error: String(r.reason),
+          dealer: dealers[i]?.user.email,
+        });
+      }
+    });
+  } catch (e) {
+    logger.error("Email: dealer lookup failed", { error: String(e) });
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export type RequestQuotesResult =
+  | { success: true; quoteRequestId: string }
+  | {
+      success: false;
+      errorCode:
+        | "UNAUTHENTICATED"
+        | "FORBIDDEN"
+        | "VALIDATION_ERROR"
+        | "NOT_FOUND"
+        | "ALREADY_SENT"
+        | "ESTIMATE_OUTDATED"
+        | "PRICING_DATA_MISSING"
+        | "INTERNAL_ERROR";
+      error: string;
+    };
+
+/**
+ * Sends a saved estimate to dealers: its DRAFT request opens for 72 hours.
+ *
+ * Before this, a draft could never be sent. The buyer had to run the
+ * calculator again, which saved a second project for the same home: extra
+ * work for them, and the same home counted twice by anything that totals
+ * estimates. Opening the draft's own request keeps one home as one record.
+ *
+ * The estimate is recomputed from the saved layout first, as
+ * createQuoteRequestAction does, at today's rates and copper snapshot. A
+ * draft can sit for weeks, and dealers should price the bill of materials the
+ * engine produces today, not the one it produced the day the draft was saved.
+ */
+export async function requestQuotesAction(rawProjectId: unknown): Promise<RequestQuotesResult> {
+  const authz = await requireRole(BUYER_ROLES);
+  if (!authz.ok) {
+    return {
+      success: false,
+      errorCode: authz.code,
+      error:
+        authz.code === "FORBIDDEN" ? "Dealer accounts cannot request quotes." : authz.error,
+    };
+  }
+
+  const parsedId = recordIdSchema.safeParse(rawProjectId);
+  if (!parsedId.success) {
+    return { success: false, errorCode: "VALIDATION_ERROR", error: "Invalid project id." };
+  }
+  const projectId = parsedId.data;
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      ownerId: true,
+      projectName: true,
+      inputData: true,
+      quoteRequest: { select: { id: true, status: true } },
+    },
+  });
+
+  if (!project?.quoteRequest) {
+    return { success: false, errorCode: "NOT_FOUND", error: "Project not found." };
+  }
+  if (project.ownerId !== authz.userId) {
+    return { success: false, errorCode: "FORBIDDEN", error: "You do not own this project." };
+  }
+  if (project.quoteRequest.status !== "DRAFT") {
+    return {
+      success: false,
+      errorCode: "ALREADY_SENT",
+      error: "This estimate has already been sent to dealers.",
+    };
+  }
+  const quoteRequestId = project.quoteRequest.id;
+
+  const savedInput: Prisma.JsonObject = isRecord(project.inputData)
+    ? (project.inputData as Prisma.JsonObject)
+    : {};
+  const estimate = await runEstimate(savedInput.layout);
+  if (!estimate.ok) {
+    logger.warn("Draft could not be re-priced for quotes", {
+      projectId,
+      errorCode: estimate.errorCode,
+    });
+    if (estimate.errorCode === "VALIDATION_ERROR") {
+      // Saved by an older calculator whose layout the current schema no
+      // longer accepts. Opening it anyway would send dealers a stale bill.
+      return {
+        success: false,
+        errorCode: "ESTIMATE_OUTDATED",
+        error:
+          "This estimate was saved by an older version of the calculator. Enter the home in the calculator again and request quotes from there.",
+      };
+    }
+    return {
+      success: false,
+      errorCode: estimate.errorCode === "PRICING_DATA_MISSING" ? "PRICING_DATA_MISSING" : "INTERNAL_ERROR",
+      error: estimate.error,
+    };
+  }
+
+  const result = estimate.result;
+  const visibilityCity = deriveVisibilityCity(result.phaseDecision?.regulatoryPolicyKey);
+  const now = new Date();
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // The copper reading in force now, as at creation: the bill is
+      // re-priced today, so it is stamped with today's snapshot.
+      const snapshot = await tx.priceSnapshot.findFirst({
+        where: { effectiveDate: { lte: now } },
+        orderBy: [{ effectiveDate: "desc" }, { createdAt: "desc" }],
+        select: { id: true },
+      });
+
+      // Conditional on DRAFT, so a double click or a second tab cannot open
+      // it twice: the loser matches no row and is told it was already sent.
+      const opened = await tx.quoteRequest.updateMany({
+        where: { id: quoteRequestId, status: "DRAFT" },
+        data: {
+          status: "OPEN",
+          visibilityCity,
+          expiresAt: rfqExpiryFrom(now),
+          // Dealers read createdAt as the date the request was issued, and
+          // their board is sorted by it. A draft's is the day it was saved,
+          // so it is reset to the moment dealers can first see it.
+          createdAt: now,
+        },
+      });
+      if (opened.count === 0) throw new Error("ALREADY_SENT");
+
+      await tx.project.update({
+        where: { id: projectId },
+        data: {
+          status: "RFQ_SUBMITTED",
+          priceSnapshotId: snapshot?.id ?? null,
+          inputData: {
+            ...savedInput,
+            generatedAt: result.generatedAt,
+            algorithmVersion: result.algorithmVersion,
+            layout: JSON.parse(JSON.stringify(estimate.layout)) as Prisma.InputJsonValue,
+          },
+          bomData: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue,
+          totalEstimate: result.pricing.materialCost,
+        },
+      });
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "ALREADY_SENT") {
+      return {
+        success: false,
+        errorCode: "ALREADY_SENT",
+        error: "This estimate has already been sent to dealers.",
+      };
+    }
+    logger.error("Failed to open a draft for quotes", {
+      error: err instanceof Error ? err.message : "Unknown error",
+      projectId,
+    });
+    return {
+      success: false,
+      errorCode: "INTERNAL_ERROR",
+      error: "Could not send this estimate to dealers. Please try again.",
+    };
+  }
+
+  await notifyRequestSaved({
+    saveMode: "OPEN",
+    projectId,
+    quoteRequestId,
+    projectName: project.projectName,
+    visibilityCity,
+    estimate: result,
+  });
+
+  return { success: true, quoteRequestId };
 }
 
 export async function submitQuoteAction(raw: SubmitQuoteInput): Promise<SubmitQuoteResult> {
@@ -680,15 +878,21 @@ export async function acceptQuoteAction(rawQuoteId: string): Promise<QuoteDecisi
             throw new Error("NOT_OWNER");
           if (quote.status !== "SUBMITTED")
             throw new Error("ALREADY_PROCESSED");
+          // Not OPEN means a quote on this request was already accepted
+          // (CLOSED); nothing else ever moves an OPEN request on.
           if (quote.quoteRequest.status !== "OPEN")
             throw new Error("RFQ_NOT_OPEN");
           // A validity window the platform will not enforce is decoration.
           // Accepting a lapsed price binds the dealer to a copper rate that
           // may have moved under them, which is exactly what the field exists
           // to prevent.
+          //
+          // It is also the only deadline. The request's own expiresAt and
+          // its quote limit stop new bids; they do not end the buyer's
+          // choice. Refusing once bidding closed meant a buyer who waited
+          // for every bid, as a sealed-bid auction invites, could accept
+          // none of them. The rule is isQuoteAcceptable in validity.ts.
           if (isExpired(quote.validUntil)) throw new Error("QUOTE_EXPIRED");
-          if (isExpired(quote.quoteRequest.expiresAt))
-            throw new Error("RFQ_NOT_OPEN");
 
           // 1. Accept this quote
           await tx.quote.update({
@@ -783,7 +987,7 @@ export async function acceptQuoteAction(rawQuoteId: string): Promise<QuoteDecisi
           case "ALREADY_PROCESSED":
             return { success: false, error: "This quote has already been processed." };
           case "RFQ_NOT_OPEN":
-            return { success: false, error: "This quote request is no longer open." };
+            return { success: false, error: "A quote on this request has already been accepted." };
           case "QUOTE_EXPIRED":
             return {
               success: false,
@@ -910,23 +1114,27 @@ export async function rejectQuoteAction(rawQuoteId: string): Promise<QuoteDecisi
  * still sees it in their history, it still counts toward the RFQ's quoteCount,
  * and it still feeds admin analytics. Only `getQuotesForProject` filters on it.
  *
- * Two statuses are refused, and both for the same reason — hiding would leave
- * someone stranded:
+ * Two kinds of quote are refused, and both for the same reason — hiding would
+ * leave someone stranded:
  *
- *   SUBMITTED on a still-OPEN RFQ  the dealer is actively waiting on an answer.
+ *   SUBMITTED, still acceptable    the dealer is actively waiting on an answer.
  *                                  Making their quote silently vanish from the
  *                                  buyer's screen means it is never accepted
  *                                  and never rejected. Reject it first; that
  *                                  sends the dealer their notification, and the
- *                                  row can then be removed.
+ *                                  row can then be removed. Bidding having
+ *                                  closed does not change this: the buyer can
+ *                                  still accept the quote until it lapses.
  *
  *   ACCEPTED                       this is the deal in progress. The dealer's
  *                                  phone and email are only rendered on that
  *                                  row, so hiding it destroys the buyer's only
  *                                  route to the person they just hired.
  *
- * A SUBMITTED quote on a CLOSED or EXPIRED request *can* be hidden: nobody is
- * waiting on that any more, and stale rows are exactly what needs clearing.
+ * A SUBMITTED quote whose price has lapsed, or whose request already has an
+ * accepted quote, *can* be hidden: nobody is waiting on it any more, and stale
+ * rows are exactly what needs clearing. The rule is isQuoteHideable in
+ * validity.ts, which the quote matrix reads too.
  */
 export async function hideQuoteAction(rawQuoteId: string): Promise<QuoteDecisionResult> {
   const guard = await authorizeBuyerDecision(rawQuoteId);
@@ -939,6 +1147,7 @@ export async function hideQuoteAction(rawQuoteId: string): Promise<QuoteDecision
       select: {
         status: true,
         isHidden: true,
+        validUntil: true,
         quoteRequest: {
           select: {
             status: true,
@@ -963,7 +1172,11 @@ export async function hideQuoteAction(rawQuoteId: string): Promise<QuoteDecision
       };
     }
 
-    if (quote.status === "SUBMITTED" && quote.quoteRequest.status === "OPEN") {
+    const hideable = isQuoteHideable(
+      { status: quote.status, lapsed: isExpired(quote.validUntil) },
+      quote.quoteRequest.status === "CLOSED"
+    );
+    if (!hideable) {
       return {
         success: false,
         error: "Reject this quote first. The dealer is still waiting on a decision.",

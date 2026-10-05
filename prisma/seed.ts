@@ -337,7 +337,8 @@ async function main() {
   // the single-phase board schedule — the stacked-list layout with a DP
   // incomer, which is what most NCR flats actually get. This is the fixture
   // for that path. Saved as a DRAFT so it does not add noise to the dealer
-  // board; open it from the homeowner's dashboard.
+  // board; open it from the homeowner's dashboard. Request Dealer Quotes
+  // there sends it, so a re-seed puts it back to a draft with no bids.
 
   const layoutC: LayoutInput = {
     propertyType: "FLAT",
@@ -356,7 +357,12 @@ async function main() {
 
   const projectC = await prisma.project.upsert({
     where: { id: "seed-project-003" },
-    update: { bomData: asJson(bomC), totalEstimate: bomC.pricing.materialCost },
+    update: {
+      status: "ESTIMATED",
+      inputData: { source: "SEED", layout: asJson(layoutC) },
+      bomData: asJson(bomC),
+      totalEstimate: bomC.pricing.materialCost,
+    },
     create: {
       id: "seed-project-003",
       ownerId: homeowner.id,
@@ -369,9 +375,10 @@ async function main() {
     },
   });
 
+  await prisma.quote.deleteMany({ where: { quoteRequest: { projectId: projectC.id } } });
   await prisma.quoteRequest.upsert({
     where: { projectId: projectC.id },
-    update: {},
+    update: { status: "DRAFT", quoteCount: 0, expiresAt: null },
     create: {
       projectId: projectC.id,
       status: "DRAFT",

@@ -21,6 +21,18 @@
 //     absorb a commodity swing they cannot hedge. 48–72 hours is the window
 //     dealers will actually hold a copper-linked price for; a week was not.
 //     Always set by the server — submitQuoteSchema does not accept a date.
+//
+// The first clock governs dealers, the second governs the buyer. A request
+// stops taking bids when its 72 hours run out or every bid slot is filled,
+// but the buyer can still accept any bid until that bid's own validity ends.
+// Closing the bidding must never take the choice away: waiting for every bid
+// before deciding is the point of a sealed-bid auction.
+//
+// A request's stored status therefore means:
+//   DRAFT   saved, never shown to dealers
+//   OPEN    shown to dealers and not yet decided; whether it still takes bids
+//           is derived from expiresAt and quoteCount, never stored
+//   CLOSED  the buyer accepted a quote. Nothing else sets it.
 // ============================================================================
 
 export const RFQ_LIFETIME_HOURS = 72;
@@ -81,4 +93,98 @@ export function effectiveRfqStatus(
   now: Date = new Date()
 ): string {
   return status === "OPEN" && isExpired(expiresAt, now) ? "EXPIRED" : status;
+}
+
+/** The request fields every rule below reads. */
+export interface RequestClock {
+  status: string;
+  expiresAt: Date | string | null | undefined;
+  quoteCount: number;
+  maxQuotes: number;
+}
+
+/** Every bid slot is taken. submitQuoteTransaction refuses the next bid. */
+export function isRequestFull(quoteCount: number, maxQuotes: number): boolean {
+  return quoteCount >= maxQuotes;
+}
+
+/**
+ * Whether a dealer can still bid: open, inside its 72 hours, with a slot
+ * free. submitQuoteTransaction checks each condition itself under a row lock;
+ * this is the same rule for the screens that decide whether to offer the form.
+ */
+export function isTakingBids(request: RequestClock, now: Date = new Date()): boolean {
+  return (
+    request.status === "OPEN" &&
+    !isExpired(request.expiresAt, now) &&
+    !isRequestFull(request.quoteCount, request.maxQuotes)
+  );
+}
+
+/**
+ * The status a dealer should see: effectiveRfqStatus, plus FULL once every
+ * bid slot is taken. A full request stays OPEN in the database, because its
+ * buyer has still to choose, but to a dealer it is closed to bidding.
+ */
+export function dealerRfqStatus(request: RequestClock, now: Date = new Date()): string {
+  const status = effectiveRfqStatus(request.status, request.expiresAt, now);
+  return status === "OPEN" && isRequestFull(request.quoteCount, request.maxQuotes)
+    ? "FULL"
+    : status;
+}
+
+/**
+ * Where a request stands for its buyer.
+ *
+ *   DRAFT           saved, never sent to dealers
+ *   OPEN            dealers can still bid
+ *   BIDDING_CLOSED  no more bids (72 hours passed, or every slot is full),
+ *                   but quotes came in, and any still inside its validity
+ *                   can be accepted
+ *   EXPIRED         bidding ended with no quotes at all
+ *   ACCEPTED        the buyer accepted a quote
+ */
+export type BuyerRequestState = "DRAFT" | "OPEN" | "BIDDING_CLOSED" | "EXPIRED" | "ACCEPTED";
+
+export function buyerRequestState(
+  request: RequestClock,
+  now: Date = new Date()
+): BuyerRequestState {
+  if (request.status === "DRAFT") return "DRAFT";
+  if (request.status === "CLOSED") return "ACCEPTED";
+  if (isTakingBids(request, now)) return "OPEN";
+  return request.quoteCount > 0 ? "BIDDING_CLOSED" : "EXPIRED";
+}
+
+/** What the two buyer rules below need to know about a quote. */
+export interface QuoteStanding {
+  status: string;
+  /** Past its validUntil. Resolved by the caller, so a client component can
+      pass the server's answer instead of reading its own clock. */
+  lapsed: boolean;
+}
+
+/**
+ * Whether the buyer can still accept a quote: submitted, its price not
+ * lapsed, and no quote on the request accepted yet (`requestDecided`).
+ *
+ * The request's own deadline and its quote limit are deliberately absent.
+ * They stop new bids; they do not end the buyer's choice. acceptQuoteAction
+ * enforces this, and the quote matrix offers Accept on the same terms.
+ */
+export function isQuoteAcceptable(quote: QuoteStanding, requestDecided: boolean): boolean {
+  return quote.status === "SUBMITTED" && !quote.lapsed && !requestDecided;
+}
+
+/**
+ * Whether the buyer may hide a quote from their comparison ("Remove").
+ *
+ * Never the accepted quote: its row is the only place the dealer's contact
+ * details appear. Never a quote that could still be accepted: its dealer is
+ * waiting for an answer, and the honest way to clear it is Reject. Anything
+ * else is a stale row. hideQuoteAction enforces this; the matrix mirrors it.
+ */
+export function isQuoteHideable(quote: QuoteStanding, requestDecided: boolean): boolean {
+  if (quote.status === "ACCEPTED") return false;
+  return !isQuoteAcceptable(quote, requestDecided);
 }

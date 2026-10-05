@@ -64,8 +64,8 @@ On a three-phase board, circuits are placed heaviest first onto whichever of the
 
 ## Marketplace
 
-- **Quotes from verified dealers.** A saved estimate becomes a request for quotation (RFQ). It is visible to approved dealers whose city or service area matches, and stays open for 72 hours.
-- **Built for copper volatility.** Every quote carries a server-set 72-hour validity and a declared wire grade (FR, FRLS or ZHFR), so dealers never hold a copper-linked price open-ended, and buyers compare like with like.
+- **Quotes from verified dealers.** A saved estimate becomes a request for quotation (RFQ). It is visible to approved dealers whose city or service area matches, and takes sealed bids for 72 hours or until five dealers have bid. An estimate saved as a draft can be sent later from the dashboard; it is re-priced at that day's rates first.
+- **Built for copper volatility.** Every quote carries a server-set 72-hour validity and a declared wire grade (FR, FRLS or ZHFR), so dealers never hold a copper-linked price open-ended, and buyers compare like with like. That validity is the buyer's only deadline: once bidding closes they can still accept any quote until it lapses.
 - **Contact details stay private** until the homeowner accepts a quote.
 - **Daily copper reference.** A Vercel cron runs every day around 5 PM IST and records a ₹/kg copper parity rate, derived from COMEX and the USD/INR reference rate. It skips days when COMEX is closed, refuses implausible readings rather than recording them, and the rate is shown on `/copper-rate`.
 

@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { effectiveRfqStatus } from "@/features/quotes/validity";
+import { dealerRfqStatus } from "@/features/quotes/validity";
 import { buildDistributionSchedule } from "@/features/calculator/boardEngine";
 import type { CircuitDefinition } from "@/features/calculator/type";
 import { RfqDetailClient, type BomSnapshot } from "./RfqDetailClient";
@@ -239,7 +239,9 @@ export default async function RfqDetailPage({ params }: PageProps) {
   return (
     <RfqDetailClient
       rfqId={rfq.id}
-      rfqStatus={effectiveRfqStatus(rfq.status, rfq.expiresAt)}
+      // FULL once every bid slot is taken: still OPEN for its buyer, closed
+      // to bidding. Without it the form would offer a bid the server refuses.
+      rfqStatus={dealerRfqStatus(rfq)}
       projectName={rfq.project.projectName}
       createdAt={rfq.createdAt.toISOString()}
       expiresAt={rfq.expiresAt?.toISOString() ?? null}
