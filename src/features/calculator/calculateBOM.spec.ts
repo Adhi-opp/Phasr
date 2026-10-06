@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { buildDistributionSchedule, MAX_BREAKER_FOR_GAUGE } from "./boardEngine";
 import { calculateBOM } from "./calculateBOM";
 import { CIRCUIT_TYPES } from "./constants";
+import { buildCalculatorInput } from "./generateRoomSpecs";
+import type { LayoutInput } from "./layoutTypes";
 import type { CalculatorInput, RoomSpec } from "./type";
 
 function makeRoom(partial: Omit<RoomSpec, "id">, id = "room-1"): RoomSpec {
@@ -544,4 +546,74 @@ run("Room dimensions never change the bill: cable is sized per point", () => {
   const misread = calculateBOM(makeInput("Delhi", [room(18, 15)]));
   assert.deepEqual(misread.items, asRead.items);
   assert.equal(misread.totalCircuits, asRead.totalCircuits);
+});
+
+// ---------------------------------------------------------------------------
+// Voltage drop
+// ---------------------------------------------------------------------------
+
+const isVoltageDropWarning = (warning: string) => warning.includes("voltage drop");
+
+run("Ordinary homes raise no voltage-drop warning", () => {
+  // The check used to run each circuit's full current through its total
+  // cable, every point's run added up, so every full eight-point lighting
+  // circuit failed it. A full circuit is in each of these homes.
+  const homes: LayoutInput[] = [
+    {
+      propertyType: "FLAT", city: "Delhi", bedrooms: 2, bathrooms: 2, balconies: 1, totalFloors: 1,
+      modularKitchen: false, acInBedrooms: true, acInLivingRoom: true, geyserInBathrooms: true,
+    },
+    {
+      propertyType: "DUPLEX", city: "Gurugram", bedrooms: 5, bathrooms: 4, balconies: 3, totalFloors: 2,
+      modularKitchen: true, acInBedrooms: true, acInLivingRoom: true, geyserInBathrooms: true,
+    },
+  ];
+  for (const layout of homes) {
+    const result = calculateBOM(buildCalculatorInput(layout));
+    assert.ok(result.circuits.some((c) => c.circuitType === "LIGHTING" && c.pointCount === 8));
+    assert.deepEqual(result.warnings.filter(isVoltageDropWarning), [], `${layout.bedrooms}BHK ${layout.propertyType}`);
+  }
+});
+
+run("A room far from the board still raises the warning", () => {
+  // 8 points × 120 W at 0.85 power factor is 4.9 A. Over 70 m to the
+  // farthest point (60 m home run + 10 m across the room) on 1.5 mm², that
+  // drops 8.3 V, past the 6.9 V (3%) lighting limit.
+  const result = calculateBOM(
+    makeInput("Delhi", [
+      makeRoom({
+        name: "Outhouse",
+        type: "BEDROOM",
+        floor: 0,
+        lengthFt: 12,
+        widthFt: 10,
+        lightPoints: 4,
+        fanPoints: 1,
+        socket5A: 3,
+        socket15A: 0,
+        heavyAppliances: 0,
+        exhaustFan: 0,
+        customDbDistanceMeters: 60,
+      }),
+    ])
+  );
+  const lighting = result.circuits.find((c) => c.circuitType === "LIGHTING");
+  assert.equal(lighting?.farthestPointMeters, 70);
+  assert.ok(result.warnings.some((w) => isVoltageDropWarning(w) && w.includes(lighting!.circuitId)));
+});
+
+run("No circuit's farthest point lies beyond its own cable", () => {
+  const result = calculateBOM(
+    buildCalculatorInput({
+      propertyType: "FLAT", city: "Noida", bedrooms: 3, bathrooms: 3, balconies: 2, totalFloors: 1,
+      modularKitchen: true, acInBedrooms: true, acInLivingRoom: true, geyserInBathrooms: true,
+    })
+  );
+  for (const circuit of result.circuits) {
+    assert.ok(circuit.farthestPointMeters !== undefined, circuit.circuitId);
+    assert.ok(circuit.farthestPointMeters! <= circuit.wireLengthMeters, circuit.circuitId);
+  }
+  // A shared circuit's farthest point is well short of its total cable.
+  const fullLighting = result.circuits.find((c) => c.circuitType === "LIGHTING" && c.pointCount === 8);
+  assert.ok(fullLighting && fullLighting.farthestPointMeters! < fullLighting.wireLengthMeters / 2);
 });

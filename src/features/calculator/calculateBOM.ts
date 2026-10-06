@@ -54,7 +54,7 @@ import type {
   PricingCode,
 } from "./type";
 
-const ALGORITHM_VERSION = "1.1.0";
+const ALGORITHM_VERSION = "1.2.0";
 
 // ============================================================================
 // REALISTIC WIRE LENGTH CONSTANTS
@@ -69,6 +69,14 @@ const METERS_PER_DEDICATED_RUN = 14;
 
 /** Extra meters added for floor-to-floor runs */
 const METERS_PER_FLOOR_DIFF = 4;
+
+/**
+ * From a room's switchboard to its farthest point: up to the ceiling, across
+ * the room and down to a socket. About what a large living room (some 6 × 4 m)
+ * needs along its walls. Used only by the voltage-drop check, never for cable
+ * quantities.
+ */
+const FARTHEST_POINT_RUN_METERS = 10;
 
 /** Points grouped per lighting+5A circuit (Indian practice: 8-10) */
 const POINTS_PER_LIGHT_CIRCUIT = 8;
@@ -96,6 +104,20 @@ function getDbDistance(room: RoomSpec, dbFloor: number): number {
   const floorDiff = Math.abs(room.floor - dbFloor);
   // Base distance 5m same floor + 4m per additional floor
   return 5 + floorDiff * METERS_PER_FLOOR_DIFF;
+}
+
+/**
+ * How far a shared circuit's farthest point is from the DB: the home run to
+ * the most distant room it serves, then across that room. Capped at the
+ * circuit's own route length, which no point can be farther than.
+ */
+function farthestPointMeters(
+  servedRooms: RoomSpec[],
+  dbFloor: number,
+  wireRun: number
+): number {
+  const homeRun = Math.max(...servedRooms.map((room) => getDbDistance(room, dbFloor)));
+  return Math.min(wireRun, homeRun + FARTHEST_POINT_RUN_METERS);
 }
 
 let _circuitCounter = 0;
@@ -134,6 +156,11 @@ function generateAllCircuits(
   }
 
   for (const [floor, floorRooms] of roomsByFloor) {
+    const roomsServedBy = (batch: { roomId: string }[]): RoomSpec[] => {
+      const served = floorRooms.filter((room) => batch.some((point) => point.roomId === room.id));
+      return served.length > 0 ? served : [floorRooms[0]];
+    };
+
     // ---------------------------------------------------------------
     // 1. LIGHTING + 5A SOCKETS — grouped across rooms on this floor
     //    Each circuit: 10A MCB, 1.5 sq mm wire, max 8 points
@@ -181,6 +208,7 @@ function generateAllCircuits(
         pointDescription: desc,
         wireLengthMeters: wireRun,
         conduitLengthMeters: wireRun * 0.85,
+        farthestPointMeters: farthestPointMeters(roomsServedBy(batch), dbFloor, wireRun),
       });
     }
 
@@ -218,6 +246,7 @@ function generateAllCircuits(
         pointDescription: `${pointCount}× 15A socket (${roomNames.join(", ")})`,
         wireLengthMeters: wireRun,
         conduitLengthMeters: wireRun * 0.85,
+        farthestPointMeters: farthestPointMeters(roomsServedBy(batch), dbFloor, wireRun),
       });
     }
 
@@ -240,6 +269,8 @@ function generateAllCircuits(
           pointDescription: `Dedicated AC/Geyser (${room.name})`,
           wireLengthMeters: wireRun,
           conduitLengthMeters: wireRun * 0.85,
+          // One appliance at the end of its own run.
+          farthestPointMeters: wireRun,
         });
       }
 
@@ -261,6 +292,7 @@ function generateAllCircuits(
           pointDescription: `Cooking range / induction hob (${room.name})`,
           wireLengthMeters: wireRun,
           conduitLengthMeters: wireRun * 0.85,
+          farthestPointMeters: wireRun,
         });
       }
     }
@@ -670,38 +702,45 @@ feederCurrentAmps *= 1.25;
     pointDescription: "Main feeder from energy meter to distribution board",
     wireLengthMeters: feederLength,
     conduitLengthMeters: feederLength,
+    farthestPointMeters: feederLength,
   });
 
-  // --- Step 6: Voltage drop checks --- //10:43 am edited
+  // --- Step 6: Voltage drop checks ---
+  // Each circuit is checked at its farthest point, as if its whole current
+  // flowed the whole way there. It does not: the current falls as each point
+  // branches off. So this overstates the drop, and a warning means a run is
+  // long enough to deserve a look. The circuit's total cable
+  // (wireLengthMeters) is the wrong length to use. It adds up every point's
+  // run, which no single current flows through, and it flagged every full
+  // lighting circuit in an ordinary flat.
   for (const circuit of allCircuits) {
-  if (circuit.circuitId === "MAIN-FEEDER") continue;
+    if (circuit.circuitId === "MAIN-FEEDER") continue;
 
-  const isLighting = circuit.circuitType === "LIGHTING";
+    const isLighting = circuit.circuitType === "LIGHTING";
 
-  // Estimate actual current instead of using MCB rating
-  let estimatedWatts = 0;
+    // Estimate actual current instead of using MCB rating
+    let estimatedWatts = 0;
 
-  if (circuit.circuitType === "LIGHTING") {
-    estimatedWatts = circuit.pointCount * 120; 
-    // ~LED + fan blended
-  } else if (circuit.circuitType === "POWER_15A") {
-    estimatedWatts = circuit.pointCount * 500;
-  } else if (circuit.circuitType === "HEAVY_APPLIANCE") {
-    estimatedWatts = 2000;
-  } else if (circuit.circuitType === "COOKING_RANGE") {
-    estimatedWatts = APPLIANCE_LOADS_WATTS.cookingRange;
-  }
+    if (circuit.circuitType === "LIGHTING") {
+      estimatedWatts = circuit.pointCount * 120; // ~LED + fan blended
+    } else if (circuit.circuitType === "POWER_15A") {
+      estimatedWatts = circuit.pointCount * 500;
+    } else if (circuit.circuitType === "HEAVY_APPLIANCE") {
+      estimatedWatts = 2000;
+    } else if (circuit.circuitType === "COOKING_RANGE") {
+      estimatedWatts = APPLIANCE_LOADS_WATTS.cookingRange;
+    }
 
-  const currentAmps =
-    estimatedWatts /
-    (VOLTAGE_DROP.nominalVoltage * ELECTRICAL_CONSTANTS.POWER_FACTOR);
+    const currentAmps =
+      estimatedWatts /
+      (VOLTAGE_DROP.nominalVoltage * ELECTRICAL_CONSTANTS.POWER_FACTOR);
 
-  const ok = checkVoltageDropOk(
-    circuit.wireGauge,
-    currentAmps,
-    circuit.wireLengthMeters,
-    isLighting
-  );//GPT code edited at 10:43 am  the above code block uses real current circuit
+    const ok = checkVoltageDropOk(
+      circuit.wireGauge,
+      currentAmps,
+      circuit.farthestPointMeters ?? circuit.wireLengthMeters,
+      isLighting
+    );
     if (!ok) {
       warnings.push(
         `Circuit ${circuit.circuitId} (${circuit.roomName}) may exceed voltage drop limits. Consider upgrading wire gauge or relocating DB closer.`

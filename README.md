@@ -24,6 +24,8 @@ Every run is counted three times (phase, neutral and earth), given a 10% margin,
 
 Because room dimensions never enter the cable calculation, a room size that is mistyped, or misread off a floor plan, cannot inflate the estimate. What moves the BOM is what an electrician would move it for: how many rooms there are, what they are, and the appliances in them.
 
+Voltage drop is checked at each circuit's farthest point, the home run to the farthest room it serves plus 10 m across that room, with the circuit's whole current assumed to flow the whole way. That overstates the drop, so a warning marks a run worth checking. The check never uses a circuit's total cable, which adds up every point's run.
+
 ### Protection defaults
 
 | Circuit | Cable | Breaker |
