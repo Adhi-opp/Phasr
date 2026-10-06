@@ -24,6 +24,8 @@ Every run is counted three times (phase, neutral and earth), given a 10% margin,
 
 Because room dimensions never enter the cable calculation, a room size that is mistyped, or misread off a floor plan, cannot inflate the estimate. What moves the BOM is what an electrician would move it for: how many rooms there are, what they are, and the appliances in them.
 
+Voltage drop is checked at each circuit's farthest point, the home run to the farthest room it serves plus 10 m across that room, with the circuit's whole current assumed to flow the whole way. That overstates the drop, so a warning marks a run worth checking. The check never uses a circuit's total cable, which adds up every point's run.
+
 ### Protection defaults
 
 | Circuit | Cable | Breaker |
@@ -54,7 +56,7 @@ The connected-load limit is set by each state's electricity regulator, and NCR s
 | Gurugram, Faridabad | HERC (DHBVN) | Up to 5 kW | Above 5 kW |
 | Noida, Greater Noida, Ghaziabad | UPERC | Below 5 kW | 5 kW or more |
 
-The calculator asks for the city and applies that state's rule. An estimate saved before the city question existed is treated as Delhi, and anywhere outside NCR falls back to 7 kW. When either test trips, the whole BOM switches to three-phase parts automatically: a TPN distribution board, a four-pole isolator and a 63 A four-pole RCCB.
+The calculator asks for the site first, a city and a pin code, and applies that state's rule to presets and custom layouts alike. The pin code must lie in the city's state (its first two digits are the postal circle: 11 Delhi, 12–13 Haryana, 20–28 UP), since a mismatch would put the home under the wrong rule. An estimate saved before the city question existed is treated as Delhi, and anywhere outside NCR falls back to 7 kW. When either test trips, the whole BOM switches to three-phase parts automatically: a TPN distribution board, a four-pole isolator and a 63 A four-pole RCCB.
 
 The parts list and the board schedule read the same main-switch rating, and the main feeder from the meter is sized to carry that breaker under the fire-guard table: 10 mm² for 40 A, 16 mm² for 63 A.
 
@@ -64,7 +66,7 @@ On a three-phase board, circuits are placed heaviest first onto whichever of the
 
 ## Marketplace
 
-- **Quotes from verified dealers.** A saved estimate becomes a request for quotation (RFQ). It is visible to approved dealers whose city or service area matches, and takes sealed bids for 72 hours or until five dealers have bid. An estimate saved as a draft can be sent later from the dashboard; it is re-priced at that day's rates first.
+- **Quotes from verified dealers.** A saved estimate becomes a request for quotation (RFQ), and records the site's pin code on both. It is visible to approved dealers whose city or service area matches, and takes sealed bids for 72 hours or until five dealers have bid. An estimate saved as a draft can be sent later from the dashboard; it is re-priced at that day's rates first.
 - **Built for copper volatility.** Every quote carries a server-set 72-hour validity and a declared wire grade (FR, FRLS or ZHFR), so dealers never hold a copper-linked price open-ended, and buyers compare like with like. That validity is the buyer's only deadline: once bidding closes they can still accept any quote until it lapses.
 - **Contact details stay private** until the homeowner accepts a quote.
 - **Daily copper reference.** A Vercel cron runs every day around 5 PM IST and records a ₹/kg copper parity rate, derived from COMEX and the USD/INR reference rate. It skips days when COMEX is closed, refuses implausible readings rather than recording them, and the rate is shown on `/copper-rate`.

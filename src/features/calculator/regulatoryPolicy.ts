@@ -38,15 +38,18 @@ export interface RegulatoryPolicyResult {
   authority?: string;
 }
 
+export type NcrState = "Delhi" | "Haryana" | "Uttar Pradesh";
+
 interface StateRule {
+  state: NcrState;
   thresholdKw: number;
   threePhaseAtThreshold: boolean;
   authority: string;
 }
 
-const DELHI: StateRule = { thresholdKw: 10, threePhaseAtThreshold: false, authority: "Delhi (DERC)" };
-const HARYANA: StateRule = { thresholdKw: 5, threePhaseAtThreshold: false, authority: "Haryana (HERC)" };
-const UTTAR_PRADESH: StateRule = { thresholdKw: 5, threePhaseAtThreshold: true, authority: "Uttar Pradesh (UPERC)" };
+const DELHI: StateRule = { state: "Delhi", thresholdKw: 10, threePhaseAtThreshold: false, authority: "Delhi (DERC)" };
+const HARYANA: StateRule = { state: "Haryana", thresholdKw: 5, threePhaseAtThreshold: false, authority: "Haryana (HERC)" };
+const UTTAR_PRADESH: StateRule = { state: "Uttar Pradesh", thresholdKw: 5, threePhaseAtThreshold: true, authority: "Uttar Pradesh (UPERC)" };
 
 const NCR_RULES: Record<string, StateRule> = {
   NCR: DELHI,
@@ -78,6 +81,16 @@ export function normalizeCityKey(city: string): string {
 
 export function isNcrCityKey(cityKey: string): boolean {
   return Object.hasOwn(NCR_RULES, normalizeCityKey(cityKey));
+}
+
+/**
+ * The state an NCR city is in. Null for "NCR" alone, which names no state
+ * (the engine applies Delhi's rule to it), and for anywhere outside NCR.
+ */
+export function ncrStateFor(city: string): NcrState | null {
+  const key = normalizeCityKey(city);
+  if (key === "NCR" || !Object.hasOwn(NCR_RULES, key)) return null;
+  return NCR_RULES[key].state;
 }
 
 /** The state rule for an NCR city, or null for anywhere else. */

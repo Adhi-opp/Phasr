@@ -76,6 +76,13 @@ export interface CircuitDefinition {
   // Calculated wire length for this circuit (in meters, before safety margin)
   wireLengthMeters: number;
   conduitLengthMeters: number;
+
+  /**
+   * Route length from the DB to this circuit's farthest point, which is what
+   * the voltage-drop check measures. Shorter than wireLengthMeters on a shared
+   * circuit, which totals every point's run. Absent on BOMs saved before Oct 2026.
+   */
+  farthestPointMeters?: number;
 }
 
 export interface LoadBreakdown {

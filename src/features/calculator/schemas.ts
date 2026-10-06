@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { z } from "zod";
+import { PINCODE_FORMAT_MESSAGE, PINCODE_PATTERN, pincodeIssue } from "./pincode";
 
 // Zod compiles object parsers with `new Function` when it can, and finds out
 // by trying it once. Under the site's Content-Security-Policy (no
@@ -23,6 +24,11 @@ export const layoutSchema = z
     // and city also keys a database lookup; the public calculator must not
     // accept a megabyte of either.
     city: z.string().trim().max(60).optional(),
+    // The site's pin code. Optional here, because a layout is also checked
+    // where none exists: a plan read by Snap-to-BOM, and drafts saved before
+    // the calculator asked. The calculator requires it, and so does saving
+    // (createQuoteRequestAction).
+    pincode: z.string().trim().regex(PINCODE_PATTERN, PINCODE_FORMAT_MESSAGE).optional(),
     bedrooms: z.number().int().min(1).max(5),
     bathrooms: z.number().int().min(1).max(4),
     balconies: z.number().int().min(0).max(3),
@@ -49,6 +55,14 @@ export const layoutSchema = z
       message: "Bathrooms cannot exceed bedrooms + 1",
       path: ["bathrooms"],
     }
-  );
+  )
+  .superRefine((data, ctx) => {
+    // The pin code must be in the city's state: the city picks the
+    // three-phase rule, so a mismatch means one of them is wrong.
+    // A malformed one has already been reported by the field itself.
+    if (!data.pincode || !PINCODE_PATTERN.test(data.pincode)) return;
+    const issue = pincodeIssue(data.pincode, data.city);
+    if (issue) ctx.addIssue({ code: "custom", message: issue, path: ["pincode"] });
+  });
 
 export type LayoutFormValues = z.infer<typeof layoutSchema>;

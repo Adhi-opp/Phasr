@@ -128,9 +128,14 @@ model Project {
   status           ProjectStatus    @default(DRAFT)
   
   // The shape of this JSON MUST be validated by Zod on the backend
-  inputData        Json             
-  bomData          Json?            
+  inputData        Json
+  bomData          Json?
   totalEstimate    Float?
+
+  // The site's pin code, from the calculator. It is also in inputData's
+  // layout; a column lets demand be counted by area without reading JSON.
+  // Null on projects saved before the calculator asked for it.
+  pincode          String?          @db.VarChar(6)
 
   // The copper index this estimate was priced against, so a saved BOQ can be
   // re-read at the rate it was generated with rather than today's. Optional:
@@ -149,6 +154,7 @@ model Project {
   @@index([ownerId])
   @@index([status])
   @@index([priceSnapshotId])
+  @@index([pincode])
 }
 
 model QuoteRequest {
@@ -161,6 +167,9 @@ model QuoteRequest {
   // stops new bids, neither ends the buyer's choice (features/quotes/validity).
   status           QuoteRequestStatus @default(OPEN)
   visibilityCity   String             // Essential for localizing dealer leads
+  // The site's pin code (Project.pincode), set when the request is saved and
+  // again when a draft is sent. Not yet used to choose dealers: they still
+  // match on visibilityCity. Null on requests saved before it was recorded.
   visibilityPincode String?
   maxQuotes        Int                @default(5)
   quoteCount       Int                @default(0)

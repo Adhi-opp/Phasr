@@ -368,6 +368,18 @@ export async function createQuoteRequestAction(
   const projectData = estimate.result;
   const layoutData = estimate.layout;
 
+  // Every saved estimate records where the home is. The preview does not
+  // need it, so runEstimate leaves it optional; a saved project must have it.
+  // Its match with the city was checked by layoutSchema.
+  const pincode = layoutData.pincode;
+  if (!pincode) {
+    return {
+      success: false,
+      errorCode: "VALIDATION_ERROR",
+      error: "Enter the site's 6-digit pin code before saving.",
+    };
+  }
+
   const quoteRequestStatus = parsedStatus.data;
   const visibilityCity = deriveVisibilityCity(projectData.phaseDecision?.regulatoryPolicyKey);
   const now = new Date();
@@ -406,6 +418,7 @@ export async function createQuoteRequestAction(
           },
           bomData: JSON.parse(JSON.stringify(projectData)) as Prisma.InputJsonValue,
           totalEstimate: projectData.pricing.materialCost,
+          pincode,
         },
         select: {
           id: true,
@@ -417,7 +430,7 @@ export async function createQuoteRequestAction(
           projectId: project.id,
           status: quoteRequestStatus,
           visibilityCity,
-          visibilityPincode: null,
+          visibilityPincode: pincode,
           // submitQuoteTransaction has always refused quotes past this date;
           // until now nothing ever set it, so the check was dead code and
           // requests stayed open forever. A DRAFT has no dealer visibility,
@@ -644,6 +657,9 @@ export async function requestQuotesAction(rawProjectId: unknown): Promise<Reques
 
   const result = estimate.result;
   const visibilityCity = deriveVisibilityCity(result.phaseDecision?.regulatoryPolicyKey);
+  // Null for a draft saved before the calculator asked for a pin code. It is
+  // still sent: dealers are matched on visibilityCity, not the pin code.
+  const pincode = estimate.layout.pincode ?? null;
   const now = new Date();
 
   try {
@@ -663,6 +679,7 @@ export async function requestQuotesAction(rawProjectId: unknown): Promise<Reques
         data: {
           status: "OPEN",
           visibilityCity,
+          visibilityPincode: pincode,
           expiresAt: rfqExpiryFrom(now),
           // Dealers read createdAt as the date the request was issued, and
           // their board is sorted by it. A draft's is the day it was saved,
@@ -685,6 +702,7 @@ export async function requestQuotesAction(rawProjectId: unknown): Promise<Reques
           },
           bomData: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue,
           totalEstimate: result.pricing.materialCost,
+          pincode,
         },
       });
     });
