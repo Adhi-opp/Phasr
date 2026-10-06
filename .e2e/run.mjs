@@ -30,9 +30,9 @@ const A = {
   estimate: actionId("generateEstimateAction"),
 };
 
-const home = await prisma.user.findUnique({ where: { email: "homeowner@voltflow.in" } });
-const dealer = await prisma.user.findUnique({ where: { email: "dealer@voltflow.in" } });
-const dealer2 = await prisma.user.findUnique({ where: { email: "dealer2@voltflow.in" } });
+const home = await prisma.user.findUnique({ where: { email: "homeowner@example.com" } });
+const dealer = await prisma.user.findUnique({ where: { email: "dealer@example.com" } });
+const dealer2 = await prisma.user.findUnique({ where: { email: "dealer2@example.com" } });
 
 const PID = "e2e-flow";
 
@@ -71,13 +71,13 @@ async function reset() {
 
 console.log("\n=== 1. AUTH ===");
 const buyer = jar();
-const u1 = await login(buyer, "homeowner@voltflow.in", "password123");
+const u1 = await login(buyer, "homeowner@example.com", "password123");
 check("homeowner signs in", u1.role === "HOMEOWNER", u1.role);
 const dlr = jar();
-const u2 = await login(dlr, "dealer@voltflow.in", "password123");
+const u2 = await login(dlr, "dealer@example.com", "password123");
 check("dealer signs in", u2.role === "DEALER", u2.role);
 const adm = jar();
-const u3 = await login(adm, "admin@voltflow.in", "password123");
+const u3 = await login(adm, "admin@example.com", "password123");
 check("admin signs in", u3.role === "ADMIN", u3.role);
 
 console.log("\n=== 2. ROLE ROUTING ===");
@@ -138,7 +138,7 @@ console.log("\n=== 7. CROSS-TENANT ===");
 {
   const q1 = await prisma.quote.findUnique({ where: { clientRequestId: "e2e-q1" } });
   const other = jar();
-  await login(other, "dealer@voltflow.in", "password123");
+  await login(other, "dealer@example.com", "password123");
 
   // The dealer owns this QUOTE but not the PROJECT. Assert the security
   // property (the row is untouched) rather than a particular error payload:
@@ -176,7 +176,7 @@ console.log("\n=== 8. ACCEPT ===");
   check("RFQ closed", rfq.status === "CLOSED", rfq.status);
   check("project locked", proj.status === "CLOSED", proj.status);
   const page = await get(buyer, `/dashboard/project/${p.id}/quotes`);
-  check("dealer contact released only after acceptance", page.body.includes("dealer@voltflow.in"));
+  check("dealer contact released only after acceptance", page.body.includes("dealer@example.com"));
 }
 
 console.log("\n=== 9. LAPSED QUOTE CANNOT BE ACCEPTED ===");
@@ -248,7 +248,7 @@ console.log("\n=== 10. DEALER SUBMITS A BID ===");
 console.log("\n=== 11. UNAPPROVED DEALER CANNOT BID ===");
 {
   const pending = jar();
-  await login(pending, "dealer2@voltflow.in", "password123");
+  await login(pending, "dealer2@example.com", "password123");
   const target = await prisma.quoteRequest.findFirst({ where: { project: { id: "seed-project-002" } } });
   await prisma.quote.deleteMany({ where: { quoteRequestId: target.id, dealerId: dealer2.id } });
   const r = await action(pending, `/dealer/rfq/${target.id}`, A.submitQuote, [
