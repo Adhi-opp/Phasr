@@ -63,8 +63,12 @@ function RateCard({ reading }: { reading: CopperReading }) {
   );
 }
 
+/** The daily cron adds a row every day; the page shows the latest few. The
+    table keeps them all, since each estimate points at the rate it used. */
+const RECENT_RATES_SHOWN = 5;
+
 export default async function CopperRatePage() {
-  const history = await getCopperRateHistory(8);
+  const history = await getCopperRateHistory(RECENT_RATES_SHOWN);
   const latest = history[0] ?? null;
 
   return (
@@ -118,7 +122,7 @@ export default async function CopperRatePage() {
 
           {history.length > 0 && (
             <section>
-              <SectionTitle>Recorded rates</SectionTitle>
+              <SectionTitle>Recent rates</SectionTitle>
               <table className="mt-3 w-full border-y border-neutral-300 font-mono text-[13px]">
                 <caption className="sr-only">Recent copper rates, newest first</caption>
                 <thead className="sr-only">
