@@ -5,12 +5,18 @@
 // Enough of a world to click the whole product end to end without touching
 // the admin screens first:
 //
-//   admin@voltflow.in      ADMIN     — approvals, RFQ and quote oversight
-//   homeowner@voltflow.in  HOMEOWNER — owns the seeded project
-//   dealer@voltflow.in     DEALER    — APPROVED, can quote immediately
-//   dealer2@voltflow.in    DEALER    — PENDING, for testing the approval gate
+//   admin@example.com      ADMIN     — approvals, RFQ and quote oversight
+//   homeowner@example.com  HOMEOWNER — owns the seeded project
+//   dealer@example.com     DEALER    — APPROVED, can quote immediately
+//   dealer2@example.com    DEALER    — PENDING, for testing the approval gate
 //
 // Password for all four: password123
+//
+// WHY example.com — the domain is reserved (RFC 2606): nobody can ever
+// register it and it accepts no mail. These accounts get real notification
+// emails whenever a dev database runs with RESEND_API_KEY set. On a domain
+// anyone could buy (the old voltflow.in is unregistered), those emails, with
+// whatever test data they carry, would land in a stranger's inbox.
 //
 // Idempotent throughout: every write is an upsert keyed on a natural unique
 // (email, userId, clientRequestId, wireType+brand), so running this twice
@@ -26,6 +32,10 @@
 // still exist in any database seeded before the rename. This script does not
 // delete them, because deleting users cascades to their projects and quotes.
 // Remove them by hand once you have confirmed you do not need their data.
+//
+// Seeds from before the example.com switch used @voltflow.in. Those four
+// accounts are renamed in place (see "Legacy addresses" below), so the seeded
+// project, RFQ and quotes stay attached to them and nothing is orphaned.
 // ============================================================================
 
 import { PrismaClient, type Prisma } from "@prisma/client";
@@ -50,6 +60,14 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const prisma = new PrismaClient();
+
+// Seed addresses used before the example.com switch, mapped to their current form.
+const LEGACY_EMAILS: Record<string, string> = {
+  "admin@voltflow.in": "admin@example.com",
+  "homeowner@voltflow.in": "homeowner@example.com",
+  "dealer@voltflow.in": "dealer@example.com",
+  "dealer2@voltflow.in": "dealer2@example.com",
+};
 
 /**
  * Runs the real engine rather than writing a stub.
@@ -88,8 +106,9 @@ async function main() {
   // plant a login whose password is published in this repo.
   const [userCount, seedAdmin] = await Promise.all([
     prisma.user.count(),
-    prisma.user.findUnique({
-      where: { email: "admin@voltflow.in" },
+    prisma.user.findFirst({
+      // the seed admin under its current address, or the pre-switch one
+      where: { email: { in: ["admin@example.com", "admin@voltflow.in"] } },
       select: { id: true },
     }),
   ]);
@@ -102,16 +121,33 @@ async function main() {
     return;
   }
 
+  // ── Legacy addresses ──────────────────────────────────────────────────
+  // A dev database seeded before the switch holds these accounts at
+  // @voltflow.in, and the seeded project, RFQ and quotes belong to them.
+  // Upserting the new addresses would create empty twins and orphan that
+  // data, so the old rows are renamed in place. Skipped if the new address
+  // already exists.
+  for (const [legacy, current] of Object.entries(LEGACY_EMAILS)) {
+    const [old, taken] = await Promise.all([
+      prisma.user.findUnique({ where: { email: legacy }, select: { id: true } }),
+      prisma.user.findUnique({ where: { email: current }, select: { id: true } }),
+    ]);
+    if (old && !taken) {
+      await prisma.user.update({ where: { id: old.id }, data: { email: current } });
+      console.log(`Renamed ${legacy} -> ${current}`);
+    }
+  }
+
   const pw = await hash("password123", 12);
   const now = new Date();
 
   // ── People ──────────────────────────────────────────────────────────────
 
   const admin = await prisma.user.upsert({
-    where: { email: "admin@voltflow.in" },
+    where: { email: "admin@example.com" },
     update: {},
     create: {
-      email: "admin@voltflow.in",
+      email: "admin@example.com",
       name: "Phasr Admin",
       password: pw,
       role: "ADMIN",
@@ -119,10 +155,10 @@ async function main() {
   });
 
   const homeowner = await prisma.user.upsert({
-    where: { email: "homeowner@voltflow.in" },
+    where: { email: "homeowner@example.com" },
     update: {},
     create: {
-      email: "homeowner@voltflow.in",
+      email: "homeowner@example.com",
       name: "Rahul Sharma",
       phone: "+91-9876543210",
       password: pw,
@@ -139,10 +175,10 @@ async function main() {
   // see an empty board and look like a bug.
 
   const dealer = await prisma.user.upsert({
-    where: { email: "dealer@voltflow.in" },
+    where: { email: "dealer@example.com" },
     update: {},
     create: {
-      email: "dealer@voltflow.in",
+      email: "dealer@example.com",
       name: "Vikram Singh",
       phone: "+91-9988776655",
       password: pw,
@@ -171,10 +207,10 @@ async function main() {
   // ── Pending dealer, for testing the approval gate ───────────────────────
 
   const pendingDealer = await prisma.user.upsert({
-    where: { email: "dealer2@voltflow.in" },
+    where: { email: "dealer2@example.com" },
     update: {},
     create: {
-      email: "dealer2@voltflow.in",
+      email: "dealer2@example.com",
       name: "Ankit Gupta",
       phone: "+91-9112233445",
       password: pw,
@@ -443,10 +479,10 @@ Phasr seed complete.
 
   Sign in with password123:
 
-    admin@voltflow.in      ADMIN      ${admin.id}
-    homeowner@voltflow.in  HOMEOWNER  ${homeowner.id}
-    dealer@voltflow.in     DEALER     APPROVED  — Singh Electricals & Cables
-    dealer2@voltflow.in    DEALER     PENDING   — Gupta Wire House
+    admin@example.com      ADMIN      ${admin.id}
+    homeowner@example.com  HOMEOWNER  ${homeowner.id}
+    dealer@example.com     DEALER     APPROVED  — Singh Electricals & Cables
+    dealer2@example.com    DEALER     PENDING   — Gupta Wire House
 
   Project A  seed-project-001  "2BHK Noida Sector 62"
              ${formatINR(bomA.pricing.materialCost)} · ${bomA.totalConnectedLoadKw.toFixed(2)} kW · ${bomA.items.length} BOM lines
