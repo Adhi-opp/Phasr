@@ -9,6 +9,7 @@
 // and BOMResultView. The RSC page.tsx renders this and nothing else.
 //
 // State:
+//   site            — city and pin code, merged into every layout run
 //   result          — the last BOMResult, null until first calculation
 //   lastLayout      — the inputs behind `result`; what we save and re-run from
 //   showForm        — toggles between preset view and custom form
@@ -49,7 +50,10 @@ import {
 import { PresetCards } from "./PresetCards";
 import { CalculatorForm } from "./CalculatorForm";
 import { BOMResultView } from "./BOMResultView";
+import { SiteFields, type Site } from "./SiteFields";
 import { generateEstimateAction } from "../actions";
+import { pincodeIssue } from "../pincode";
+import { NCR_CITY_OPTIONS } from "../regulatoryPolicy";
 import { formatBomForWhatsApp, whatsappShareUrl } from "../whatsappExport";
 import type { EnrichedBOMResult } from "../costEngine";
 import type { EstimateActionErrorCode } from "../actions";
@@ -58,6 +62,11 @@ import type { LayoutInput } from "../layoutTypes";
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+
+/** A stored city the site select can show; anything else, "NCR" included, reads as Delhi. */
+function siteCity(city: string | undefined): string {
+  return city && (NCR_CITY_OPTIONS as readonly string[]).includes(city) ? city : "Delhi";
+}
 
 function coerceSessionRole(role: unknown): Role | undefined {
   switch (role) {
@@ -92,6 +101,17 @@ export function CalculatorShell() {
   const [formDefaults, setFormDefaults] = useState<Partial<LayoutInput> | undefined>(undefined);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const [site, setSite] = useState<Site>({ city: "Delhi", pincode: "" });
+  // Set when an estimate is first asked for, so an empty pin code is flagged
+  // then rather than the moment the page opens.
+  const [siteAttempted, setSiteAttempted] = useState(false);
+  const pincodeRef = useRef<HTMLInputElement>(null);
+
+  const siteIssue = pincodeIssue(site.pincode, site.city);
+  // A half-typed pin code is not an error yet. A complete one, or one an
+  // estimate was asked for, is checked.
+  const shownSiteIssue = siteIssue && (siteAttempted || site.pincode.length === 6) ? siteIssue : null;
 
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -192,6 +212,7 @@ export function CalculatorShell() {
     if (!pending) return;
 
     setFormDefaults(pending.layout);
+    setSite({ city: siteCity(pending.layout.city), pincode: pending.layout.pincode ?? "" });
     runEngine(pending.layout, { scroll: false });
   }, [runEngine]);
 
@@ -229,10 +250,39 @@ export function CalculatorShell() {
   ]);
 
   // -------------------------------------------------------------------------
+  // Site
+  // -------------------------------------------------------------------------
+
+  /** Runs a layout for the current site, or sends the visitor to the pin code first. */
+  function runForSite(layout: LayoutInput): boolean {
+    setSiteAttempted(true);
+    if (siteIssue) {
+      pincodeRef.current?.focus();
+      return false;
+    }
+    runEngine({ ...layout, city: site.city, pincode: site.pincode });
+    return true;
+  }
+
+  function handleSiteChange(next: Site) {
+    setSite(next);
+    // Keep a result on screen true to the site: run it again once the new
+    // site is complete. A new city can change the supply rule, and the board.
+    if (
+      lastLayout &&
+      pincodeIssue(next.pincode, next.city) === null &&
+      (next.city !== lastLayout.city || next.pincode !== lastLayout.pincode)
+    ) {
+      runEngine({ ...lastLayout, city: next.city, pincode: next.pincode }, { scroll: false });
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Preset handlers
   // -------------------------------------------------------------------------
 
   function handlePresetSelect(layout: LayoutInput) {
+    if (!runForSite(layout)) return;
     // Determine preset ID from layout for ring highlight
     const id =
       layout.propertyType === "DUPLEX"
@@ -242,7 +292,6 @@ export function CalculatorShell() {
         : "3BHK";
     setActivePresetId(id);
     setShowForm(false);
-    runEngine(layout);
   }
 
   function handlePresetCustomize(layout: LayoutInput) {
@@ -256,8 +305,8 @@ export function CalculatorShell() {
   // -------------------------------------------------------------------------
 
   function handleFormSubmit(layout: LayoutInput) {
+    if (!runForSite(layout)) return;
     setActivePresetId(null);
-    runEngine(layout);
   }
 
   // -------------------------------------------------------------------------
@@ -266,6 +315,18 @@ export function CalculatorShell() {
 
   return (
     <div className="space-y-8">
+      {/* ------------------------------------------------------------------ */}
+      {/* Site: city and pin code, for presets and the form alike             */}
+      {/* ------------------------------------------------------------------ */}
+      <section>
+        <SiteFields
+          value={site}
+          onChange={handleSiteChange}
+          issue={shownSiteIssue}
+          pincodeRef={pincodeRef}
+        />
+      </section>
+
       {/* ------------------------------------------------------------------ */}
       {/* Section 1: Presets                                                  */}
       {/* ------------------------------------------------------------------ */}
@@ -375,6 +436,7 @@ export function CalculatorShell() {
                 <div>
                   <h2 className="text-lg font-semibold">Bill of Materials</h2>
                   <p className="text-sm text-muted-foreground">
+                    {lastLayout?.pincode ? `${siteCity(lastLayout.city)} ${lastLayout.pincode} · ` : ""}
                     {result.circuits.length > 0
                       ? `${result.totalCircuits} circuits · aligned with IS 732 practice · estimate only`
                       : "No circuits generated"}

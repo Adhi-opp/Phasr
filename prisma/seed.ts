@@ -205,6 +205,7 @@ async function main() {
   const layoutA: LayoutInput = {
     propertyType: "FLAT",
     city: "NCR",
+    pincode: "201301", // Noida
     bedrooms: 2,
     bathrooms: 2,
     balconies: 1,
@@ -219,7 +220,7 @@ async function main() {
 
   const project = await prisma.project.upsert({
     where: { id: "seed-project-001" },
-    update: { bomData: asJson(bomA), totalEstimate: bomA.pricing.materialCost },
+    update: { bomData: asJson(bomA), totalEstimate: bomA.pricing.materialCost, pincode: layoutA.pincode },
     create: {
       id: "seed-project-001",
       ownerId: homeowner.id,
@@ -229,6 +230,7 @@ async function main() {
       inputData: { source: "SEED", layout: asJson(layoutA) },
       bomData: asJson(bomA),
       totalEstimate: bomA.pricing.materialCost,
+      pincode: layoutA.pincode,
     },
   });
 
@@ -236,11 +238,12 @@ async function main() {
     where: { projectId: project.id },
     // Refreshed on re-seed so the window is always live when you sit down to
     // test — a seed whose RFQ expired three days ago tests nothing.
-    update: { status: "OPEN", expiresAt: rfqExpiryFrom(now) },
+    update: { status: "OPEN", expiresAt: rfqExpiryFrom(now), visibilityPincode: layoutA.pincode },
     create: {
       projectId: project.id,
       status: "OPEN",
       visibilityCity: "NCR",
+      visibilityPincode: layoutA.pincode,
       maxQuotes: 5,
       quoteCount: 2,
       expiresAt: rfqExpiryFrom(now),
@@ -291,6 +294,7 @@ async function main() {
   const layoutB: LayoutInput = {
     propertyType: "DUPLEX",
     city: "NCR",
+    pincode: "122001", // Gurugram
     bedrooms: 4,
     bathrooms: 4,
     balconies: 2,
@@ -305,7 +309,7 @@ async function main() {
 
   const projectB = await prisma.project.upsert({
     where: { id: "seed-project-002" },
-    update: { bomData: asJson(bomB), totalEstimate: bomB.pricing.materialCost },
+    update: { bomData: asJson(bomB), totalEstimate: bomB.pricing.materialCost, pincode: layoutB.pincode },
     create: {
       id: "seed-project-002",
       ownerId: homeowner.id,
@@ -315,16 +319,18 @@ async function main() {
       inputData: { source: "SEED", layout: asJson(layoutB) },
       bomData: asJson(bomB),
       totalEstimate: bomB.pricing.materialCost,
+      pincode: layoutB.pincode,
     },
   });
 
   await prisma.quoteRequest.upsert({
     where: { projectId: projectB.id },
-    update: { status: "OPEN", expiresAt: rfqExpiryFrom(now) },
+    update: { status: "OPEN", expiresAt: rfqExpiryFrom(now), visibilityPincode: layoutB.pincode },
     create: {
       projectId: projectB.id,
       status: "OPEN",
       visibilityCity: "NCR",
+      visibilityPincode: layoutB.pincode,
       maxQuotes: 5,
       quoteCount: 0,
       expiresAt: rfqExpiryFrom(now),
@@ -343,6 +349,7 @@ async function main() {
   const layoutC: LayoutInput = {
     propertyType: "FLAT",
     city: "NCR",
+    pincode: "110075", // Dwarka
     bedrooms: 1,
     bathrooms: 1,
     balconies: 1,
@@ -362,6 +369,7 @@ async function main() {
       inputData: { source: "SEED", layout: asJson(layoutC) },
       bomData: asJson(bomC),
       totalEstimate: bomC.pricing.materialCost,
+      pincode: layoutC.pincode,
     },
     create: {
       id: "seed-project-003",
@@ -372,17 +380,19 @@ async function main() {
       inputData: { source: "SEED", layout: asJson(layoutC) },
       bomData: asJson(bomC),
       totalEstimate: bomC.pricing.materialCost,
+      pincode: layoutC.pincode,
     },
   });
 
   await prisma.quote.deleteMany({ where: { quoteRequest: { projectId: projectC.id } } });
   await prisma.quoteRequest.upsert({
     where: { projectId: projectC.id },
-    update: { status: "DRAFT", quoteCount: 0, expiresAt: null },
+    update: { status: "DRAFT", quoteCount: 0, expiresAt: null, visibilityPincode: layoutC.pincode },
     create: {
       projectId: projectC.id,
       status: "DRAFT",
       visibilityCity: "NCR",
+      visibilityPincode: layoutC.pincode,
       maxQuotes: 5,
       quoteCount: 0,
       expiresAt: null,

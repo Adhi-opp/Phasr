@@ -39,7 +39,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Zap } from "lucide-react";
-import { NCR_CITY_OPTIONS } from "../regulatoryPolicy";
 import { layoutSchema, type LayoutFormValues } from "../schemas";
 import type { LayoutInput } from "../layoutTypes";
 
@@ -59,7 +58,6 @@ interface CalculatorFormProps {
 
 const FORM_DEFAULTS: LayoutFormValues = {
   propertyType: "FLAT",
-  city: "Delhi",
   bedrooms: 2,
   bathrooms: 2,
   balconies: 1,
@@ -71,6 +69,19 @@ const FORM_DEFAULTS: LayoutFormValues = {
   geyserInBathrooms: true,
 };
 
+/**
+ * City and pin code belong to the site, not this form: any that a preset or a
+ * restored estimate carries are dropped, so the form never fails on a field
+ * it does not show.
+ */
+function formDefaultsFrom(values?: Partial<LayoutInput>): LayoutFormValues {
+  if (!values) return FORM_DEFAULTS;
+  const layout = { ...values };
+  delete layout.city;
+  delete layout.pincode;
+  return { ...FORM_DEFAULTS, ...layout };
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -78,9 +89,7 @@ const FORM_DEFAULTS: LayoutFormValues = {
 export function CalculatorForm({ defaultValues, onSubmit, isPending }: CalculatorFormProps) {
   const form = useForm<LayoutFormValues>({
     resolver: zodResolver(layoutSchema),
-    defaultValues: defaultValues
-      ? { ...FORM_DEFAULTS, ...defaultValues }
-      : FORM_DEFAULTS,
+    defaultValues: formDefaultsFrom(defaultValues),
   });
 
   const propertyType = form.watch("propertyType");
@@ -137,37 +146,8 @@ export function CalculatorForm({ defaultValues, onSubmit, isPending }: Calculato
               )}
             />
 
-            {/* City: picks the state's three-phase rule (regulatoryPolicy.ts).
-                "NCR" from older estimates and presets shows as Delhi, whose
-                rule the engine applies to it. */}
-            <FormField
-              control={form.control}
-              name="city"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>City</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={!field.value || field.value === "NCR" ? "Delhi" : field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select city" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {NCR_CITY_OPTIONS.map((city) => (
-                        <SelectItem key={city} value={city}>
-                          {city}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>Sets your DISCOM&apos;s three-phase rule</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* City and pin code are asked once, above the presets
+                (SiteFields), and merged in by CalculatorShell. */}
 
             {/* Approximate sq ft */}
             <FormField

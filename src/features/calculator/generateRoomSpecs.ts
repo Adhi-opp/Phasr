@@ -330,6 +330,7 @@ export function buildCalculatorInput(layout: LayoutInput): CalculatorInput {
   return buildCalculatorInputFromRooms(rooms, {
     projectName: `${layout.bedrooms}BHK ${layout.propertyType} - ${city}`,
     city,
+    pincode: layout.pincode,
     totalFloors: layout.totalFloors,
   });
 }
@@ -345,14 +346,15 @@ export function buildCalculatorInputFromRooms(
   {
     projectName,
     city,
+    pincode,
     totalFloors,
-  }: { projectName: string; city?: string; totalFloors?: number }
+  }: { projectName: string; city?: string; pincode?: string; totalFloors?: number }
 ): CalculatorInput {
   return {
     projectName,
     propertyType: "RESIDENTIAL",
     city: city || "NCR",
-    pincode: "",
+    pincode: pincode ?? "",
     totalFloors: totalFloors ?? Math.max(0, ...rooms.map((room) => room.floor)) + 1,
     rooms,
     supplyPhase: "SINGLE",

@@ -19,6 +19,7 @@ export interface LayoutInput {
   // --- Property basics ---
   propertyType: "FLAT" | "BUILDER_FLOOR" | "DUPLEX";
   city?: string;              // defaults to "NCR" for estimation assumptions
+  pincode?: string;           // the site's; required to save, and must be in the city's state
   bedrooms: number;           // 1–5
   bathrooms: number;          // 1–4
   balconies: number;          // 0–3

@@ -27,6 +27,7 @@ const A = {
   createQuoteRequest: actionId("createQuoteRequestAction"),
   createPriceSnapshot: actionId("createPriceSnapshotAction"),
   requestQuotes: actionId("requestQuotesAction"),
+  estimate: actionId("generateEstimateAction"),
 };
 
 const home = await prisma.user.findUnique({ where: { email: "homeowner@voltflow.in" } });
@@ -476,7 +477,7 @@ console.log("\n=== 16. COPPER PRICE SNAPSHOTS ===");
     );
 
     const layout = {
-      propertyType: "FLAT", city: "NCR", bedrooms: 2, bathrooms: 2, balconies: 1,
+      propertyType: "FLAT", city: "NCR", pincode: "110001", bedrooms: 2, bathrooms: 2, balconies: 1,
       totalFloors: 1, approxSqFt: 1050, modularKitchen: true, acInBedrooms: true,
       acInLivingRoom: false, geyserInBathrooms: true,
     };
@@ -621,7 +622,7 @@ console.log("\n=== 19. A SAVED DRAFT CAN BE SENT FOR QUOTES ===");
   const STALE = "e2e-stale-draft";
   try {
     const layout = {
-      propertyType: "FLAT", city: "Gurugram", bedrooms: 2, bathrooms: 2, balconies: 1,
+      propertyType: "FLAT", city: "Gurugram", pincode: "122002", bedrooms: 2, bathrooms: 2, balconies: 1,
       totalFloors: 1, modularKitchen: false, acInBedrooms: true, acInLivingRoom: true,
       geyserInBathrooms: true,
     };
@@ -691,6 +692,11 @@ console.log("\n=== 19. A SAVED DRAFT CAN BE SENT FOR QUOTES ===");
     );
     check("dealers can now see it", await onBoard());
     check(
+      "the request carries the site's pin code",
+      open.visibilityPincode === "122002" && open.project.pincode === "122002",
+      `${open.visibilityPincode} ${open.project.pincode}`
+    );
+    check(
       "the buyer's page now waits for dealers",
       (await get(buyer, `/dashboard/project/${projectId}/quotes`)).body.includes("Awaiting dealer responses")
     );
@@ -727,6 +733,54 @@ console.log("\n=== 19. A SAVED DRAFT CAN BE SENT FOR QUOTES ===");
   } finally {
     if (projectId) await prisma.project.deleteMany({ where: { id: projectId } });
     await prisma.project.deleteMany({ where: { id: STALE } });
+  }
+}
+
+console.log("\n=== 20. EVERY SAVED ESTIMATE RECORDS ITS PIN CODE ===");
+{
+  const made = [];
+  try {
+    const noida = {
+      propertyType: "FLAT", city: "Noida", bedrooms: 2, bathrooms: 2, balconies: 1,
+      totalFloors: 1, modularKitchen: false, acInBedrooms: true, acInLivingRoom: true,
+      geyserInBathrooms: true,
+    };
+    const owned = () => prisma.project.count({ where: { ownerId: home.id } });
+
+    // The preview needs none: a plan read by Snap-to-BOM has none either.
+    const preview = await action(buyer, "/calculator", A.estimate, [noida]);
+    check("an estimate can be previewed without a pin code", preview.result?.success === true, JSON.stringify(preview.result)?.slice(0, 200));
+
+    const before = await owned();
+    const noPin = await action(buyer, "/calculator", A.createQuoteRequest, [noida, "DRAFT"]);
+    check(
+      "saving without a pin code is refused, and nothing is saved",
+      noPin.result?.errorCode === "VALIDATION_ERROR" && (await owned()) === before,
+      JSON.stringify(noPin.result)
+    );
+
+    // A Delhi pin code on a Noida home would put a UP site under Delhi's rule.
+    const wrongState = await action(buyer, "/calculator", A.createQuoteRequest, [{ ...noida, pincode: "110001" }, "OPEN"]);
+    check(
+      "a pin code from another state is refused",
+      wrongState.result?.errorCode === "VALIDATION_ERROR" && /pincode/.test(wrongState.result?.error ?? "") && (await owned()) === before,
+      JSON.stringify(wrongState.result)
+    );
+
+    const saved = await action(buyer, "/calculator", A.createQuoteRequest, [{ ...noida, pincode: "201301" }, "OPEN"]);
+    const rfq = saved.result?.quoteRequestId
+      ? await prisma.quoteRequest.findUnique({ where: { id: saved.result.quoteRequestId }, include: { project: true } })
+      : null;
+    if (rfq) made.push(rfq.project.id);
+    check(
+      "the pin code is saved on the project, its layout and its request",
+      rfq?.project.pincode === "201301" &&
+        rfq.project.inputData?.layout?.pincode === "201301" &&
+        rfq.visibilityPincode === "201301",
+      `${JSON.stringify(saved.result)} ${rfq?.project.pincode} ${rfq?.visibilityPincode}`
+    );
+  } finally {
+    if (made.length) await prisma.project.deleteMany({ where: { id: { in: made } } });
   }
 }
 
